@@ -7,8 +7,8 @@ import numpy as np
 
 GROUPS = ("Residual", "Attention", "MLP")
 
-# id -> (group, label, description). Order = display order. Which of these a model exposes is
-# decided by the provider (see `NNsightProvider.activations`).
+# id -> (group, label, description). Order = display order. Which of these a model exposes, and under what
+# label/description, is decided by its architecture adapter (see `archs.ArchAdapter.acts`); these are the defaults.
 REGISTRY: dict[str, tuple[str, str, str]] = {
     "resid_pre": ("Residual", "resid_pre — attn_norm input",
                   "Block input (the residual stream before attention); layer 0 is the embedding."),
@@ -16,7 +16,7 @@ REGISTRY: dict[str, tuple[str, str, str]] = {
                   "Residual stream after the attention residual add."),
     "resid_post": ("Residual", "resid_post — block output",
                    "Block output; resid_post[l] == resid_pre[l+1]."),
-    "attn_norm": ("Attention", "attn_norm — input_layernorm", "Output of the pre-attention RMSNorm."),
+    "attn_norm": ("Attention", "attn_norm — input_layernorm", "Output of the pre-attention normalization."),
     "q": ("Attention", "q — q_proj", "Query projection output (channel = head*head_dim + d)."),
     "k": ("Attention", "k — k_proj", "Key projection output (kv heads)."),
     "v": ("Attention", "v — v_proj", "Value projection output (kv heads)."),
@@ -28,7 +28,7 @@ REGISTRY: dict[str, tuple[str, str, str]] = {
                      "Attention probabilities [heads, query, key] (causal)."),
     "attn_ctx": ("Attention", "attn_ctx — o_proj input", "Per-head attention-weighted values, heads concatenated."),
     "o": ("Attention", "o — o_proj output", "Attention output before the residual add."),
-    "mlp_norm": ("MLP", "mlp_norm — post_attention_layernorm", "Output of the pre-MLP RMSNorm."),
+    "mlp_norm": ("MLP", "mlp_norm — post_attention_layernorm", "Output of the pre-MLP normalization."),
     "gate": ("MLP", "gate — gate_proj", "gate_proj output."),
     "up": ("MLP", "up — up_proj", "up_proj output."),
     "silu": ("MLP", "silu — act_fn(gate)", "Activation function applied to gate."),
@@ -62,10 +62,10 @@ class ActivationSpec:
 
 
 def make_spec(act: str, n_layers: int, channels: int | None = None, n_heads: int | None = None,
-              head_dim: int | None = None) -> ActivationSpec:
-    group, label, desc = REGISTRY[act]
-    return ActivationSpec(act, label, group, "attn" if act == ATTN_ACT else "token", channels, n_layers,
-                          n_heads, head_dim, desc)
+              head_dim: int | None = None, label: str | None = None, description: str | None = None) -> ActivationSpec:
+    group, default_label, default_desc = REGISTRY[act]
+    return ActivationSpec(act, label or default_label, group, "attn" if act == ATTN_ACT else "token", channels,
+                          n_layers, n_heads, head_dim, description or default_desc)
 
 
 @dataclass

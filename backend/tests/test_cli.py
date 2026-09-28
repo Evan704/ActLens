@@ -18,3 +18,8 @@ def test_version_flag(capsys):
         cli.main(["--version"])
     assert e.value.code == 0
     assert __version__ in capsys.readouterr().out
+
+
+def test_arch_module_flag_is_repeatable():
+    a = cli.build_parser().parse_args(["--arch-module", "pkg.arch", "--arch-module", "/x/y.py"])
+    assert a.arch_module == ["pkg.arch", "/x/y.py"]

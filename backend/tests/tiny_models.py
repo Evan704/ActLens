@@ -1,0 +1,23 @@
+"""Tiny random-init models, one per registered architecture (no downloads). The parametrized contract tests in
+test_archs.py run on every entry, so supporting a new architecture means adding an adapter *and* a line here."""
+import torch
+from transformers import LlamaConfig, LlamaForCausalLM, Qwen3Config, Qwen3ForCausalLM
+
+VOCAB, D, NH, NKV, DH, INTER, LAYERS = 97, 32, 4, 2, 8, 64, 3
+COMMON = dict(vocab_size=VOCAB, hidden_size=D, intermediate_size=INTER, num_hidden_layers=LAYERS,
+              num_attention_heads=NH, num_key_value_heads=NKV, head_dim=DH, max_position_embeddings=64,
+              attn_implementation="eager")
+
+
+def llama():
+    torch.manual_seed(0)
+    return LlamaForCausalLM(LlamaConfig(**COMMON)).eval()
+
+
+def qwen3():  # adds per-head q_norm / k_norm
+    torch.manual_seed(0)
+    return Qwen3ForCausalLM(Qwen3Config(**COMMON)).eval()
+
+
+# name -> factory
+TINY = {"llama": llama, "qwen3": qwen3}

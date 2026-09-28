@@ -25,6 +25,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="port (default: 8000, or $PORT)")
     p.add_argument("--cache-mb", type=float, default=None,
                    help="activation cache budget in MB (default: $ACTLENS_CACHE_MB or 2048)")
+    p.add_argument("--arch-module", action="append", default=[], metavar="MODULE",
+                   help="import an extra architecture adapter (dotted module name or .py path; repeatable). "
+                   "Also $ACTLENS_ARCH_MODULES (comma separated).")
     p.add_argument("--open", action="store_true", help="open the UI in a browser once the server is up")
     p.add_argument("--version", action="version", version=f"actlens {__version__}")
     return p
@@ -34,11 +37,16 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     if args.cache_mb is not None:
         os.environ["ACTLENS_CACHE_MB"] = str(args.cache_mb)
+    if args.arch_module:
+        os.environ["ACTLENS_ARCH_MODULES"] = ",".join(filter(None, [os.environ.get("ACTLENS_ARCH_MODULES"), *args.arch_module]))
 
     # Heavy imports (torch, transformers) only after argument parsing so --help/--version stay instant.
     import uvicorn
 
     from . import app as app_module
+    from .archs import load_plugins
+
+    load_plugins()  # fail at startup, not on the first model load, if an --arch-module is broken
 
     if not (app_module.FRONTEND_DIST / "index.html").is_file():
         print("actlens: no built frontend found; serving the API only. Run `npm run build` in frontend/ "

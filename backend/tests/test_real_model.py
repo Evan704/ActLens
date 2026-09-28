@@ -165,7 +165,7 @@ def attention_probs(q, k, nH, nKV, Dh):
 
 
 def check_rope_identity(prov, acts, base_q, base_k, min_gap=0.05):
-    nH, nKV, Dh = prov.n_heads, prov.n_kv_heads, prov.head_dim
+    nH, nKV, Dh = prov.dims.n_heads, prov.dims.n_kv_heads, prov.dims.head_dim
     assert nH != nKV  # exercises the GQA repeat
     probs = attention_probs(acts["q_rope"], acts["k_rope"], nH, nKV, Dh)
     got = acts["attn_pattern"].astype(np.float64)
@@ -210,8 +210,8 @@ def test_llama_style_model_without_qk_norm(tmp_path, ids):
 
 
 def test_rope_is_identity_at_position_zero_and_preserves_norms(prov, acts):
-    Dh = prov.head_dim
-    for name, base, heads in (("q_rope", "q_norm", prov.n_heads), ("k_rope", "k_norm", prov.n_kv_heads)):
+    Dh = prov.dims.head_dim
+    for name, base, heads in (("q_rope", "q_norm", prov.dims.n_heads), ("k_rope", "k_norm", prov.dims.n_kv_heads)):
         np.testing.assert_allclose(acts[name][:, 0], acts[base][:, 0], rtol=1e-5, atol=1e-5)  # angle 0
         a = acts[name].reshape(*acts[name].shape[:2], heads, Dh)
         b = acts[base].reshape(*acts[base].shape[:2], heads, Dh)
@@ -219,7 +219,7 @@ def test_rope_is_identity_at_position_zero_and_preserves_norms(prov, acts):
 
 
 def test_attn_ctx_is_pattern_times_v(prov, acts):
-    nH, nKV, Dh = prov.n_heads, prov.n_kv_heads, prov.head_dim
+    nH, nKV, Dh = prov.dims.n_heads, prov.dims.n_kv_heads, prov.dims.head_dim
     P = torch.from_numpy(acts["attn_pattern"].astype(np.float32)).double()  # [L, nH, T, T]
     V = per_head(acts["v"], nKV, Dh).repeat_interleave(nH // nKV, dim=1)  # [L, nH, T, Dh]
     ctx = (P @ V).permute(0, 2, 1, 3).reshape(P.shape[0], P.shape[2], nH * Dh).numpy()
