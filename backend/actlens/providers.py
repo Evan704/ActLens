@@ -61,6 +61,7 @@ class NNsightProvider:
         self._defs = self.adapter.acts(root, self.dims)
 
         d, cfg = self.dims, root.config
+        self.max_positions = getattr(cfg, "max_position_embeddings", None) or 1 << 30
         self.info = {
             "model_id": model_id,
             "device": self.device,
@@ -88,6 +89,7 @@ class NNsightProvider:
     def tokenize(self, text: str, max_tokens: int) -> tuple[list[int], list[str], bool]:
         tok = self.tokenizer
         full_ids = tok(text, add_special_tokens=True)["input_ids"]
+        max_tokens = min(max_tokens, self.max_positions)  # learned position tables (GPT-2) end here
         truncated = len(full_ids) > max_tokens
         ids = full_ids[:max_tokens]
         if not ids:

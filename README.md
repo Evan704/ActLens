@@ -64,13 +64,13 @@ switches between two views of that activation:
 - **Across layers** — token × layer map of a per-token statistic (L2 norm, |max|, mean, std, kurtosis, or one channel).
   Click a cell to jump to that layer with the token cursor placed.
 
-Activations (Llama-style blocks; the picker only lists what the loaded model has):
+Activations (the picker only lists what the loaded model has; see [Supported architectures](#supported-architectures)):
 
 | Group | Activations |
 |---|---|
 | Residual | `resid_pre` (attn_norm input), `resid_mid` (mlp_norm input), `resid_post` |
 | Attention | `attn_norm`, `q`, `k`, `v`, `q_norm`/`k_norm` (models with QK-norm), `q_rope`/`k_rope` (after RoPE), `attn_pattern`, `attn_ctx` (o_proj input), `o` |
-| MLP | `mlp_norm`, `gate`, `up`, `silu`, `swiglu` (= down_proj input), `down` |
+| MLP | `mlp_norm`, `gate`, `up`, `silu`, `swiglu` (= down_proj input) for gated MLPs; `up`, `mlp_act` (= down_proj input) for plain MLPs; `down` |
 
 Activations are captured lazily: the first time you open one, a forward pass records it for every layer (~0.1–0.4 s
 for Qwen3-0.6B) and it is cached (`ACTLENS_CACHE_MB`, default 2048).
@@ -101,28 +101,50 @@ PNG and PDF buttons render the current view (title, prompt, window, colormap set
 The histogram and the attention head grid have their own PNG export. The PDF embeds the figure as a high-resolution
 image rather than vector graphics, so CJK tokens render correctly.
 
+## Supported architectures
+
+| Adapter | `model_type` | Models |
+|---|---|---|
+| `llama` | `llama`, `qwen2`, `qwen3`, `mistral` (+ any model with the same module layout) | Llama, Qwen2/2.5/3, Mistral, SmolLM |
+| `gpt2` | `gpt2` | GPT-2, DistilGPT-2 |
+
+Only Qwen3-0.6B and GPT-2 have been tested on real checkpoints; every adapter is also tested on a tiny random model.
+Anything else is rejected at load time with a message naming the missing modules.
+
+### Adding an architecture
+
+An adapter (`backend/actlens/archs/`) tells ActLens which activations a model family has and how to read each one from a
+block; everything else (tracing, caching, API, UI) is architecture-neutral.
+
+1. Subclass `ArchAdapter` (or `PreNormBlockAdapter` for sequential pre-norm blocks, which already covers the residual
+   stream, norms, attention pattern/context/output and MLP output) and `@register` it. Set `layers_path`, `model_types`,
+   and implement `probe` (which modules must exist), `dims` and `acts`. `acts` returns `{activation id: ActDef}`:
+   leave out what the model lacks and it simply does not appear in the picker. `archs/gpt2.py` is a complete small example
+   (fused QKV, no RoPE, plain MLP); `archs/llama.py` shows QK-norm and RoPE (`prepare` runs once before the blocks).
+2. Add a tiny random model to `tests/tiny_models.py::TINY`. `tests/test_archs.py` then checks residual sums,
+   `attn_pattern == softmax(q k^T)`, `attn_ctx == pattern @ v`, shapes and specs for it, with no download.
+3. Ship it in your own package with the `actlens.archs` entry-point group, or try it without packaging:
+   `actlens --arch-module ./my_arch.py` (also `$ACTLENS_ARCH_MODULES`).
+
 ## Notes
 
 - Model loading: `device_map="mps"` hangs with transformers 5.x, so the model is loaded on CPU and then moved.
 - Attention capture needs `attn_implementation="eager"` (SDPA doesn't return probabilities).
-- Supported architectures: Llama-style decoders (`model.layers[i].{input_layernorm, self_attn.{q,k,v,o}_proj,
-  post_attention_layernorm, mlp.{gate,up,down}_proj, act_fn}`: Qwen2/2.5/3, Llama, Mistral, SmolLM). GPT-2 style models
-  are rejected with a clear error. Only Qwen3-0.6B has been tested on a real checkpoint (a tiny random Llama without
-  QK-norm is also tested).
 - Activations (`backend/actlens/capture.py` registry): residual stream
   (`resid_pre/mid/post`), attention (`attn_norm, q, k, v, q_norm, k_norm, q_rope, k_rope, attn_pattern, attn_ctx, o`),
-  MLP (`mlp_norm, gate, up, silu, swiglu, down`). `/api/run` lists only what the loaded model has: `q_norm`/`k_norm` need
-  QK-norm modules and `q_rope`/`k_rope` need a `rotary_emb` module (RoPE is applied from `rotary_emb`'s cos/sin, since
-  `apply_rotary_pos_emb` is a function, not a hookable module).
+  MLP (`mlp_norm, gate, up, silu, swiglu, mlp_act, down`). `/api/run` lists only what the loaded model's adapter exposes
+  (Llama-style: `q_norm`/`k_norm` need QK-norm modules and `q_rope`/`k_rope` need a `rotary_emb` module; RoPE is applied
+  from `rotary_emb`'s cos/sin, since `apply_rotary_pos_emb` is a function, not a hookable module).
 - Lazy capture: `POST /api/run` only tokenizes. The first data request for an activation runs one forward pass on the
   model thread that captures exactly that activation for all layers (~60-400 ms for Qwen3-0.6B at 64 tokens); results
   are kept in a byte-budgeted LRU keyed by `(run_id, act)` (`ACTLENS_CACHE_MB`, default 2048; the entry just built is never
   evicted). Concurrent requests for the same activation share one capture. Only the last 3 runs are registered.
 - `GET /api/run/{id}/axis_stats` gives the distribution of a per-channel or per-token statistic over a region;
   the maths is in `slicing.py` (`axis_stats`, `axis_stat_values`).
-- Tests: `cd backend && python -m pytest` runs fast fake-provider tests plus `tests/test_real_model.py` (Qwen3-0.6B
-  identities incl. recomputing attention probabilities from `q_rope`/`k_rope`; ~10 s). The real-model module is skipped
-  when the model is not in the local HF cache or `ACTLENS_SKIP_REAL=1`.
+- Tests: `cd backend && python -m pytest` runs fast fake-provider tests, the per-architecture contract tests on tiny
+  random models (`tests/test_archs.py`), and the real-model tests `tests/test_real_model.py` (Qwen3-0.6B identities incl.
+  recomputing attention probabilities from `q_rope`/`k_rope`) and `tests/test_real_gpt2.py` (~10 s). Real-model modules
+  are skipped when the checkpoint is not in the local HF cache or `ACTLENS_SKIP_REAL=1`.
 
 ## License
 

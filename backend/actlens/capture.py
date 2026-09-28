@@ -33,6 +33,8 @@ REGISTRY: dict[str, tuple[str, str, str]] = {
     "up": ("MLP", "up — up_proj", "up_proj output."),
     "silu": ("MLP", "silu — act_fn(gate)", "Activation function applied to gate."),
     "swiglu": ("MLP", "swiglu — silu(gate)·up", "Product silu(gate)*up, the input of down_proj (MLP neurons)."),
+    "mlp_act": ("MLP", "mlp_act — act(up)",
+                "Non-gated MLP: the activation function applied to up, the input of down."),
     "down": ("MLP", "down — down_proj output", "MLP output before the residual add."),
 }
 ACT_IDS = tuple(REGISTRY)

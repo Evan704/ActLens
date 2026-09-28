@@ -100,7 +100,7 @@ def test_attn_ctx_is_pattern_times_v(prov, acts):
 # ----- registry / plugins -----
 def test_builtin_adapters_registered():
     names = {a.name for a in archs.ADAPTERS}
-    assert {"llama"} <= names
+    assert {"llama", "gpt2"} <= names
 
 
 def test_plugin_module_can_register_an_adapter(tmp_path, monkeypatch):

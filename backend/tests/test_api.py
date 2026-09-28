@@ -121,7 +121,7 @@ def start_run(c, text="hello world!"):
 def test_status_and_corpus(client):
     s = client.get("/api/status").json()
     assert s["state"] == "ready" and s["model_id"] == "fake/model" and s["presets"]
-    assert not any("gpt2" in p["id"].lower() for p in PRESET_MODELS)
+    assert len({p["id"] for p in PRESET_MODELS}) == len(PRESET_MODELS)
     corpus = client.get("/api/corpus").json()
     assert len(corpus) >= 10 and all({"id", "title", "text"} <= set(c) for c in corpus)
 

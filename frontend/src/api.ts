@@ -1,5 +1,6 @@
 export type ActId = string;
-export type ActGroup = "Residual" | "Attention" | "MLP";
+/** Display group of the activation picker, chosen by the architecture adapter ("Residual", "Attention", "MLP", ...). */
+export type ActGroup = string;
 export type ActKind = "token" | "attn";
 export type AggKind = "absmax" | "mean" | "max" | "min";
 export type OrderKind = "natural" | "absmax" | "std" | "mean_abs";

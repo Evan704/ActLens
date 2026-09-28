@@ -30,6 +30,7 @@ PRESET_MODELS = [
     {"id": "Qwen/Qwen3-0.6B", "label": "Qwen3-0.6B"},
     {"id": "Qwen/Qwen2.5-0.5B", "label": "Qwen2.5-0.5B"},
     {"id": "HuggingFaceTB/SmolLM2-360M", "label": "SmolLM2-360M"},
+    {"id": "openai-community/gpt2", "label": "GPT-2"},
 ]
 MAX_RUNS = 3
 DEFAULT_CACHE_MB = 2048
