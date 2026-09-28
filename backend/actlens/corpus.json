@@ -1,0 +1,86 @@
+[
+ {
+  "id": "fact-capital",
+  "title": "Factual recall: capital",
+  "category": "Facts",
+  "text": "The capital of France is Paris. The capital of Germany is Berlin. The capital of Japan is"
+ },
+ {
+  "id": "fact-eiffel",
+  "title": "Eiffel Tower",
+  "category": "Facts",
+  "text": "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France. It is named after the engineer Gustave Eiffel, whose company designed and built the tower from 1887 to 1889."
+ },
+ {
+  "id": "ioi",
+  "title": "Indirect object (IOI)",
+  "category": "Circuits",
+  "text": "When Mary and John went to the store, John gave a drink to"
+ },
+ {
+  "id": "induction",
+  "title": "Induction (repeated random tokens)",
+  "category": "Circuits",
+  "text": "kettle orbit lantern quartz meadow violin cobalt harbor thistle ember kettle orbit lantern quartz meadow violin cobalt harbor thistle ember"
+ },
+ {
+  "id": "sink",
+  "title": "Attention sink (repeated token)",
+  "category": "Circuits",
+  "text": "the the the the the the the the the the the the the the the the the the the the"
+ },
+ {
+  "id": "story",
+  "title": "Short story",
+  "category": "English",
+  "text": "Once upon a time, in a small village at the edge of a great forest, there lived a young girl named Elara. Every morning she walked to the river to fetch water, and every evening she listened to the old stories her grandmother told by the fire."
+ },
+ {
+  "id": "science",
+  "title": "Photosynthesis",
+  "category": "English",
+  "text": "Photosynthesis is the process by which green plants, algae, and some bacteria convert light energy into chemical energy. During this process, carbon dioxide and water are transformed into glucose and oxygen, using sunlight absorbed by chlorophyll."
+ },
+ {
+  "id": "zh",
+  "title": "中文段落",
+  "category": "Multilingual",
+  "text": "人工智能是研究、开发用于模拟、延伸和扩展人的智能的理论、方法、技术及应用系统的一门新的技术科学。近年来，大型语言模型在自然语言处理任务上取得了显著进展。"
+ },
+ {
+  "id": "multi",
+  "title": "Multilingual greetings",
+  "category": "Multilingual",
+  "text": "Hello, how are you? Bonjour, comment allez-vous ? Hallo, wie geht es dir? こんにちは、お元気ですか？ 你好，你怎么样？ Привет, как дела?"
+ },
+ {
+  "id": "code-py",
+  "title": "Python: fibonacci",
+  "category": "Code",
+  "text": "def fibonacci(n):\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(n - 1):\n        a, b = b, a + b\n    return b\n\nprint([fibonacci(i) for i in range(10)])"
+ },
+ {
+  "id": "code-json",
+  "title": "JSON",
+  "category": "Code",
+  "text": "{\"name\": \"ActLens\", \"version\": \"0.1.0\", \"tags\": [\"interpretability\", \"visualization\"], \"config\": {\"layers\": 28, \"hidden\": 1024, \"causal\": true}}"
+ },
+ {
+  "id": "math",
+  "title": "Arithmetic",
+  "category": "Reasoning",
+  "text": "Q: What is 17 + 25? A: 42\nQ: What is 38 + 46? A: 84\nQ: What is 59 + 27? A:"
+ },
+ {
+  "id": "chat",
+  "title": "Chat template (raw)",
+  "category": "Format",
+  "text": "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhy is the sky blue?<|im_end|>\n<|im_start|>assistant\n"
+ },
+ {
+  "id": "ws",
+  "title": "Whitespace & punctuation",
+  "category": "Format",
+  "text": "  \n\n\t---   ...   !!!   ???   \n\n\n"
+ }
+]

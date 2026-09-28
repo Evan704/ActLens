@@ -1,0 +1,47 @@
+/* Distribution panel. Colours come from the app's CSS variables (styles.css). */
+.dist { gap: 8px; min-width: 0; }
+.dist.is-stale > :not(.dist-head):not(.dist-seg):not(.dist-chips) { opacity: 0.55; transition: opacity 0.15s 0.12s; }
+.dist > * { transition: opacity 0.1s; }
+.dist-head { display: flex; justify-content: space-between; align-items: baseline; }
+.dist-busy { min-height: 1em; }
+
+.dist-seg { display: flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.dist-seg button { flex: 1; border: none; border-radius: 0; background: var(--panel); padding: 4px 4px; white-space: nowrap; }
+.dist-seg button + button { border-left: 1px solid var(--border); }
+.dist-seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .dist-seg button.on { color: #1a1206; } }
+
+.dist-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dist-chips-label { color: var(--muted); font-size: 11px; width: 36px; flex: none; }
+.dist-chips button { padding: 1px 8px; border-radius: 999px; font-size: 11.5px; background: var(--panel); }
+.dist-chips button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); font-weight: 600; }
+.dist-chips button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.dist-sub { overflow-wrap: anywhere; }
+.dist-loading { padding: 24px 0; text-align: center; }
+.dist-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 0; }
+.dist-h { font-weight: 700; font-size: 12px; margin-top: 4px; }
+.dist-h .muted { font-weight: 400; font-size: 11px; }
+
+.dist .hist { position: relative; }
+.dist .hist-tools { flex-wrap: wrap; gap: 4px 12px; justify-content: flex-start; font-size: 12px; }
+.dist .hist-tools button { margin-left: auto; }
+.hist-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
+.hist-legend i { display: inline-block; width: 0; height: 10px; }
+.hist-legend .m-zero { border-left: 1px dashed var(--muted); }
+.hist-legend .m-mean { border-left: 2px solid var(--fg); margin-left: 4px; }
+.hist-legend .m-selected { border-left: 2px solid #1971c2; margin-left: 4px; }
+@media (prefers-color-scheme: dark) { .hist-legend .m-selected { border-left-color: #74c0fc; } }
+.hist-note { margin-top: 2px; }
+.dist .hist-tip { pointer-events: none; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2); }
+
+.dist-top { display: flex; flex-direction: column; gap: 2px; }
+.dist-top button { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; padding: 2px 8px; font: 11.5px ui-monospace, Menlo, monospace; overflow: hidden; background: var(--panel); }
+.dist-top button.on { border-color: var(--accent); }
+.dist-top-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-soft); z-index: 0; }
+.dist-top-main, .dist-top b { position: relative; z-index: 1; }
+.dist-top-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dist-details summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.dist-details[open] { display: flex; flex-direction: column; gap: 6px; }
+
+.dist-inside { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 2px; }
