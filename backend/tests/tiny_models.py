@@ -40,4 +40,5 @@ TINY = {
     "llama": llama, "qwen3": qwen3, "gpt2": gpt2,
     # real Gemma has head_dim (256) != hidden/heads and MQA on the 2B model: pin both here
     "gemma": auto("gemma", head_dim=16, num_key_value_heads=1),
+    "olmo": auto("olmo", clip_qkv=0.05),  # non-parametric LayerNorm; a tiny clip_qkv makes the clamp bite
 }

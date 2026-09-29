@@ -1,4 +1,4 @@
-"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
+"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, OLMo, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
 from __future__ import annotations
 
 import torch
@@ -13,7 +13,7 @@ ROPE_ACTS = ("q_rope", "k_rope")
 @register
 class LlamaAdapter(PreNormBlockAdapter):
     name = "llama"
-    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma")
+    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma", "olmo")
     layers_path = "model.layers"
     norm1, attn, o_proj = "input_layernorm", "self_attn", "self_attn.o_proj"
     norm2, down_proj = "post_attention_layernorm", "mlp.down_proj"
@@ -38,10 +38,16 @@ class LlamaAdapter(PreNormBlockAdapter):
         has_rope = has(root, "model.rotary_emb")
         act_fn_is_module = isinstance(block0.mlp.act_fn, torch.nn.Module)
         nH, nKV, Dh, I = d.n_heads, d.n_kv_heads, d.head_dim, d.inter
+        # OLMo clamps q/k/v in place after the projections. No adapter model has both this and QK-norm (OLMoE would
+        # clamp after the norm, which `rope` below does not model).
+        clip = getattr(root.config, "clip_qkv", None)
         out = self.shared_acts(d)
 
+        def clamp(t):
+            return t if clip is None else t.clamp(-clip, clip)
+
         def proj(name, heads):
-            return ActDef(lambda b, c: c.tok(get(b, f"self_attn.{name}_proj").output), heads * Dh, heads, Dh)
+            return ActDef(lambda b, c: clamp(c.tok(get(b, f"self_attn.{name}_proj").output)), heads * Dh, heads, Dh)
 
         def qk_norm(name, heads):
             return ActDef(lambda b, c: c.tok(get(b, f"self_attn.{name}_norm").output), heads * Dh, heads, Dh)
@@ -50,7 +56,8 @@ class LlamaAdapter(PreNormBlockAdapter):
             src = f"self_attn.{name}_norm" if has_qk_norm else f"self_attn.{name}_proj"
 
             def read(b, c: TraceCtx):
-                x = c.host(get(b, src).output).reshape(c.n_tokens, heads, Dh)
+                x = c.host(get(b, src).output)
+                x = (x if has_qk_norm else clamp(x)).reshape(c.n_tokens, heads, Dh)
                 return apply_rope(x, *c.aux["rope"]).reshape(c.n_tokens, -1)
             return ActDef(read, heads * Dh, heads, Dh)
 
