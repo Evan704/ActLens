@@ -7,8 +7,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { OrderKind, Stats } from "../api";
+import { statOfId, useMeta } from "../meta";
 import {
-  AXIS_STATS,
   REGION_SCOPES,
   VALUE_SCOPES,
   axisStatLabel,
@@ -90,6 +90,7 @@ function meanMarkers(s: Pick<Stats, "mean">): HistMarker[] {
 
 export function DistributionPanel(props: DistributionPanelProps) {
   const { runId, act, actLabel, layer, layerLabel, nTokens, nChannels, order, tokens, headDim, cursor, cursorChannelId } = props;
+  const meta = useMeta();
   const [mode, setMode] = useState<Mode>("values");
   const [valueScope, setValueScope] = useState<ValueScope>("window");
   const [axisScope, setAxisScope] = useState<RegionScope>("window");
@@ -167,7 +168,7 @@ export function DistributionPanel(props: DistributionPanelProps) {
         <>
           <div className="dist-chips" role="group" aria-label="Statistic">
             <span className="dist-chips-label">stat</span>
-            {AXIS_STATS.map((s) => (
+            {meta.stats.map((s) => (
               <button key={s.id} className={stat === s.id ? "on" : ""} title={s.title} onClick={() => setStat(s.id)}>
                 {s.label}
               </button>
@@ -289,7 +290,9 @@ function AxisBody(p: BodyBase & { stats: AxisStatsResponse; scope: RegionScope }
   const axis = stats.axis;
   const what = axis === "channel" ? "channels" : "tokens";
   const rt = regionText(stats.region, p.order, p.headDim);
-  const st = axisStatTitle(axis, stats.stat);
+  const statInfos = useMeta().stats;
+  const statName = axisStatLabel(stats.stat, statInfos);
+  const st = axisStatTitle(axis, stats.stat, statInfos);
   const maxAbs = Math.max(1e-30, ...stats.top.map((t) => Math.abs(t.value)));
   const cursorIndex = p.cursor ? (axis === "channel" ? p.cursor.channel : p.cursor.token) : null;
   const tooFew = stats.n <= 1;
@@ -315,11 +318,11 @@ function AxisBody(p: BodyBase & { stats: AxisStatsResponse; scope: RegionScope }
   return (
     <>
       <div className="muted small dist-sub" title={p.title}>
-        {stats.n.toLocaleString()} {what} · {axisStatLabel(stats.stat)} over {axis === "channel" ? "tokens" : "channels"} · {p.scopeLine} · {rt}
+        {stats.n.toLocaleString()} {what} · {statName} over {axis === "channel" ? "tokens" : "channels"} · {p.scopeLine} · {rt}
       </div>
       {reduced <= 1 && (
         <div className="muted small">
-          Each {axis} is summarised from a single {axis === "channel" ? "token" : "channel"}; widen the region for a meaningful {axisStatLabel(stats.stat)}.
+          Each {axis} is summarised from a single {axis === "channel" ? "token" : "channel"}; widen the region for a meaningful {statName}.
         </div>
       )}
       {tooFew ? (
@@ -330,7 +333,7 @@ function AxisBody(p: BodyBase & { stats: AxisStatsResponse; scope: RegionScope }
           name={`${p.exportName}_${axis}_${stats.stat}_${p.scope}`}
           title={`${p.title} — ${st}`}
           meta={[`region: ${p.scopeLine}`, `${rt} · n = ${stats.n.toLocaleString()} ${what}`, `${stats.stat}: mean ${fmtNum(stats.mean)} · std ${fmtNum(stats.std)} · max ${fmtNum(stats.max)}`]}
-          xLabel={`${axisStatLabel(stats.stat)} per ${axis}`}
+          xLabel={`${statName} per ${axis}`}
           total={stats.n}
           markers={overallMarkers}
           selectedLabel={`selected ${axis}`}
@@ -361,7 +364,7 @@ function AxisBody(p: BodyBase & { stats: AxisStatsResponse; scope: RegionScope }
         ) : (
           <>
             <div className="muted small dist-sub">
-              n = {innerStats.n.toLocaleString()} {axis === "channel" ? "tokens" : "channels"} · {regionText(inner, p.order, p.headDim)} · {axisStatLabel(stats.stat)} = {fmtNum(marker)}
+              n = {innerStats.n.toLocaleString()} {axis === "channel" ? "tokens" : "channels"} · {regionText(inner, p.order, p.headDim)} {marker !== null && ` · ${statName} = ${fmtNum(marker)}`}
             </div>
             {innerStats.n <= 1 ? (
               <div className="muted small">a single value ({fmtNum(innerStats.mean)}); no distribution to show</div>
@@ -391,7 +394,7 @@ function AxisBody(p: BodyBase & { stats: AxisStatsResponse; scope: RegionScope }
         )}
       </div>
       <div className="dist-h">
-        Top {what} by {stats.stat === "mean" || stats.stat === "kurtosis" ? `|${stats.stat}|` : axisStatLabel(stats.stat)}
+        Top {what} by {statOfId(statInfos, stats.stat)?.signed ? `|${stats.stat}|` : statName}
         <span className="muted"> · click to {axis === "channel" ? "jump to the channel" : "move the cursor"}</span>
       </div>
       <div className="dist-top" data-testid="top-list">
@@ -416,7 +419,7 @@ function AxisBody(p: BodyBase & { stats: AxisStatsResponse; scope: RegionScope }
         })}
       </div>
       <details className="dist-details">
-        <summary>Summary of the {axisStatLabel(stats.stat)} values across {what}</summary>
+        <summary>Summary of the {statName} values across {what}</summary>
         <SummaryTable stats={stats} />
         <PercentileTable stats={stats} />
       </details>

@@ -101,6 +101,10 @@ class Run:
     def n_tokens(self) -> int:
         return len(self.token_ids)
 
+    def spec_of_kind(self, kind: str) -> ActivationSpec | None:
+        """The (first) activation of this run with the given kind, e.g. the attention pattern for "attn"."""
+        return next((s for s in self.specs.values() if s.kind == kind), None)
+
 
 @dataclass
 class Capture:

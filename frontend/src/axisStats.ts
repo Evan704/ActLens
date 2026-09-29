@@ -6,6 +6,7 @@
  */
 import { getJSON, runPath, type OrderKind, type Stats } from "./api";
 import type { Region4 } from "./components/DistributionPanel";
+import { DEFAULT_META, statOfId, type StatInfo } from "./meta";
 import { fmtToken } from "./tokens";
 
 // ---------------------------------------------------------------------------------------------
@@ -13,17 +14,10 @@ import { fmtToken } from "./tokens";
 // ---------------------------------------------------------------------------------------------
 
 export type AxisKind = "channel" | "token";
-export type AxisStat = "absmax" | "std" | "mean" | "norm" | "kurtosis";
+export type AxisStat = string;
 
-export const AXIS_STATS: { id: AxisStat; label: string; title: string }[] = [
-  { id: "absmax", label: "|max|", title: "largest absolute value" },
-  { id: "std", label: "std", title: "standard deviation" },
-  { id: "mean", label: "mean", title: "mean (signed)" },
-  { id: "norm", label: "norm", title: "L2 norm" },
-  { id: "kurtosis", label: "kurtosis", title: "excess kurtosis (heavy-tailedness)" },
-];
-
-export const axisStatLabel = (s: AxisStat): string => AXIS_STATS.find((x) => x.id === s)?.label ?? s;
+/** Short name of a statistic; `stats` comes from `useMeta()`. */
+export const axisStatLabel = (s: AxisStat, stats: StatInfo[] = DEFAULT_META.stats): string => statOfId(stats, s)?.label ?? s;
 
 export interface AxisTop {
   /** rank in `order` for channels, token position for tokens */
@@ -197,8 +191,9 @@ export function insideRegion(axis: AxisKind, region: Region4, cursor: { token: n
   return t >= region.t0 && t < region.t1 ? { t0: t, t1: t + 1, d0: region.d0, d1: region.d1 } : null;
 }
 
-/** The per-axis statistic `stat` recovered from the summary of one channel's / token's values (what `axis_stats` reports for it). */
-export function statOf(stat: AxisStat, s: Pick<Stats, "absmax" | "std" | "mean" | "l2" | "kurtosis">): number {
+/** The per-axis statistic `stat` recovered from the summary of one channel's / token's values (what `axis_stats` reports for it).
+ * The summary only carries these five; a statistic registered later on the backend has no value here (null). */
+export function statOf(stat: AxisStat, s: Pick<Stats, "absmax" | "std" | "mean" | "l2" | "kurtosis">): number | null {
   switch (stat) {
     case "absmax":
       return s.absmax;
@@ -210,6 +205,8 @@ export function statOf(stat: AxisStat, s: Pick<Stats, "absmax" | "std" | "mean" 
       return s.l2;
     case "kurtosis":
       return s.kurtosis;
+    default:
+      return null;
   }
 }
 
@@ -297,8 +294,8 @@ export function scopeText(
 }
 
 /** What the per-axis histogram is a histogram *of*. */
-export function axisStatTitle(axis: AxisKind, stat: AxisStat): string {
-  return `${axisStatLabel(stat)} per ${axis}`;
+export function axisStatTitle(axis: AxisKind, stat: AxisStat, stats?: StatInfo[]): string {
+  return `${axisStatLabel(stat, stats)} per ${axis}`;
 }
 
 /** Share of values outside the (clipped) histogram range. */

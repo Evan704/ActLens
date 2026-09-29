@@ -2,9 +2,10 @@ export type ActId = string;
 /** Display group of the activation picker, chosen by the architecture adapter ("Residual", "Attention", "MLP", ...). */
 export type ActGroup = string;
 export type ActKind = "token" | "attn";
-export type AggKind = "absmax" | "mean" | "max" | "min";
-export type OrderKind = "natural" | "absmax" | "std" | "mean_abs";
-export type OverviewStat = "norm" | "absmax" | "mean" | "std" | "kurtosis" | "dim";
+/** The ids below are defined by the backend registries (see `meta.ts`), not fixed here. */
+export type AggKind = string;
+export type OrderKind = string;
+export type OverviewStat = string;
 export type AttnStat = "entropy" | "first_token" | "distance";
 
 /** One capturable activation, as listed by /api/run. */

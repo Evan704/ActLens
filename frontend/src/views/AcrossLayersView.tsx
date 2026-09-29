@@ -7,20 +7,12 @@ import { Heatmap, type HeatmapHandle, type Matrix } from "../Heatmap";
 import type { Cell } from "../figure";
 import { DisplayControls, ExportButtons, NumberBox } from "../components/controls";
 import { Trajectory } from "../components/Trajectory";
+import { statOfId, useMeta } from "../meta";
 import { useStore } from "../store";
 import { fmtToken } from "../tokens";
 import { ACT_DISPLAY, SEQ_DISPLAY } from "../viewState";
 import type { Viewport } from "../viewport";
 
-export const STAT_LABEL: Record<OverviewStat, string> = {
-  norm: "L2 norm",
-  absmax: "|max|",
-  mean: "mean",
-  std: "std",
-  kurtosis: "excess kurtosis",
-  dim: "single channel",
-};
-const SIGNED: OverviewStat[] = ["mean", "dim"];
 
 /** "Across layers" mode: token x layer map of a per-token statistic of the selected activation. */
 export function AcrossLayersView({ info }: { info: ActivationInfo }) {
@@ -59,7 +51,10 @@ export function AcrossLayersView({ info }: { info: ActivationInfo }) {
 
   const rowLabel = useCallback((i: number) => (i < T ? `${i} ${fmtToken(run.tokens[i], 16)}` : null), [run.tokens, T]);
   const colLabel = useCallback((i: number) => info.layer_labels[i] ?? null, [info.layer_labels]);
-  const statText = o.stat === "dim" ? `channel ${channelLabel(o.channel, headDim)}` : STAT_LABEL[o.stat];
+  const meta = useMeta();
+  const statInfos = [...meta.stats, ...meta.overview_extra];
+  const statName = (id: OverviewStat) => statOfId(statInfos, id)?.long_label ?? id;
+  const statText = o.stat === "dim" ? `channel ${channelLabel(o.channel, headDim)}` : statName(o.stat);
 
   const valueAt = useCallback((c: Cell) => (matrix && c.row < matrix.rows && c.col < matrix.cols ? matrix.values[c.row * matrix.cols + c.col] : null), [matrix]);
   const describe = useCallback(
@@ -71,7 +66,7 @@ export function AcrossLayersView({ info }: { info: ActivationInfo }) {
     [valueAt, run.tokens, info.layer_labels, statText],
   );
 
-  const setStat = (stat: OverviewStat) => patchAcross({ stat, display: SIGNED.includes(stat) ? ACT_DISPLAY : SEQ_DISPLAY });
+  const setStat = (stat: OverviewStat) => patchAcross({ stat, display: statOfId(statInfos, stat)?.diverging ? ACT_DISPLAY : SEQ_DISPLAY });
   const tokenRow = hoverRow ?? cursorRow;
   const trajectory = useMemo(() => {
     if (!matrix || tokenRow === null || tokenRow >= matrix.rows) return null;
@@ -85,9 +80,9 @@ export function AcrossLayersView({ info }: { info: ActivationInfo }) {
         <div className="toolbar">
           <label>
             Statistic per token
-            <select value={o.stat} onChange={(e) => setStat(e.target.value as OverviewStat)}>
-              {(Object.keys(STAT_LABEL) as OverviewStat[]).map((s) => (
-                <option key={s} value={s}>{STAT_LABEL[s]}</option>
+            <select value={o.stat} onChange={(e) => setStat(e.target.value)}>
+              {statInfos.map((s) => (
+                <option key={s.id} value={s.id}>{s.long_label}</option>
               ))}
             </select>
           </label>
@@ -124,7 +119,7 @@ export function AcrossLayersView({ info }: { info: ActivationInfo }) {
             rowTextual
             rowTitle="token"
             colTitle="layer"
-            colorTitle={o.stat === "dim" ? "value" : STAT_LABEL[o.stat]}
+            colorTitle={o.stat === "dim" ? "value" : statName(o.stat)}
             describe={describe}
             cursor={cursorRow !== null ? { row: cursorRow, col: active } : null}
             onCursor={(c) => openCell(c.col, c.row)}

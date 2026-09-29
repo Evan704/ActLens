@@ -6,10 +6,11 @@ import math
 import numpy as np
 
 from .capture import Capture
+from .reducers import AGGS as _POOLERS, ORDER_SCORES, STATS
 
-AGGS = ("absmax", "mean", "max", "min")
-ORDERS = ("natural", "absmax", "std", "mean_abs")
-OVERVIEW_STATS = ("norm", "absmax", "mean", "std", "kurtosis", "dim")
+AGGS = tuple(_POOLERS)
+ORDERS = ("natural", *ORDER_SCORES)
+OVERVIEW_STATS = (*STATS, "dim")  # snapshot of the built-ins for callers; validation reads the live registry
 
 
 def clamp_window(lo: int, hi: int, n: int) -> tuple[int, int]:
@@ -33,16 +34,7 @@ def pool2d(a: np.ndarray, bh: int, bw: int, agg: str) -> np.ndarray:
     padded = np.full((H * bh, W * bw), np.nan, dtype=np.float32)
     padded[:h, :w] = a
     blocks = padded.reshape(H, bh, W, bw).transpose(0, 2, 1, 3).reshape(H, W, bh * bw)
-    if agg == "mean":
-        out = np.nanmean(blocks, axis=-1)
-    elif agg == "max":
-        out = np.nanmax(blocks, axis=-1)
-    elif agg == "min":
-        out = np.nanmin(blocks, axis=-1)
-    else:  # absmax: keep the sign of the entry with the largest magnitude
-        mag = np.where(np.isnan(blocks), -1.0, np.abs(blocks))
-        idx = mag.argmax(axis=-1)
-        out = np.take_along_axis(blocks, idx[..., None], axis=-1)[..., 0]
+    out = _POOLERS[agg](blocks)
     return out.astype(np.float32)
 
 
@@ -57,12 +49,7 @@ def dim_order(cap: Capture, layer: int, order: str) -> np.ndarray:
     key = (layer, order)
     hit = cap.cache.get(("order", key))
     if hit is None:
-        if order == "absmax":
-            score = np.abs(x).max(axis=0)
-        elif order == "std":
-            score = x.std(axis=0)
-        else:
-            score = np.abs(x.mean(axis=0))
+        score = ORDER_SCORES[order](x)
         hit = np.argsort(-score, kind="stable")
         cap.cache[("order", key)] = hit
     return hit
@@ -118,31 +105,15 @@ def dim_profile(cap: Capture, layer: int, order: str, bins: int) -> tuple[np.nda
     return out, {"act": cap.act, "layer": layer, "order": order, "bw": bw, "n_dims": x.shape[1], "cols": out.shape[1]}
 
 
-def _kurtosis(x: np.ndarray, axis: int) -> np.ndarray:
-    m = x.mean(axis=axis, keepdims=True)
-    v = ((x - m) ** 2).mean(axis=axis)
-    m4 = ((x - m) ** 4).mean(axis=axis)
-    return m4 / np.maximum(v * v, 1e-20) - 3.0
-
-
 def overview(cap: Capture, stat: str, dim: int = 0) -> tuple[np.ndarray, dict]:
     """[n_layers, T] map of a per-token statistic (over D), for a token-kind activation."""
-    if stat not in OVERVIEW_STATS:
+    if stat != "dim" and stat not in STATS:
         raise ValueError(f"unknown stat {stat!r}")
     x = cap.arr
-    if stat == "norm":
-        out = np.linalg.norm(x, axis=-1)
-    elif stat == "absmax":
-        out = np.abs(x).max(axis=-1)
-    elif stat == "mean":
-        out = x.mean(axis=-1)
-    elif stat == "std":
-        out = x.std(axis=-1)
-    elif stat == "kurtosis":
-        out = _kurtosis(x, axis=-1)
+    if stat == "dim":
+        out = x[..., max(0, min(int(dim), x.shape[-1] - 1))]
     else:
-        d = max(0, min(int(dim), x.shape[-1] - 1))
-        out = x[..., d]
+        out = STATS[stat](x, -1)
     out = np.ascontiguousarray(out, dtype=np.float32)
     meta = {
         "act": cap.act, "stat": stat, "dim": dim, "rows": out.shape[0], "cols": out.shape[1],
@@ -274,7 +245,7 @@ def attn_region_stats(cap: Capture, layer: int, head: int, q0: int, q1: int, k0:
 # ---------- per-channel / per-token statistic distributions ----------
 
 AXES = ("channel", "token")
-AXIS_STATS = ("norm", "absmax", "mean", "std", "kurtosis")
+AXIS_STATS = tuple(STATS)  # snapshot of the built-ins; validation reads the live registry
 
 
 def _strict_window(lo: int, hi: int, n: int, name: str) -> tuple[int, int]:
@@ -288,8 +259,8 @@ def _strict_window(lo: int, hi: int, n: int, name: str) -> tuple[int, int]:
 def _check_axis_stat(axis: str, stat: str) -> None:
     if axis not in AXES:
         raise ValueError(f"unknown axis {axis!r}; expected one of {list(AXES)}")
-    if stat not in AXIS_STATS:
-        raise ValueError(f"unknown stat {stat!r}; expected one of {list(AXIS_STATS)}")
+    if stat not in STATS:
+        raise ValueError(f"unknown stat {stat!r}; expected one of {list(STATS)}")
 
 
 def axis_stat_values(region: np.ndarray, axis: str, stat: str) -> np.ndarray:
@@ -298,15 +269,7 @@ def axis_stat_values(region: np.ndarray, axis: str, stat: str) -> np.ndarray:
     _check_axis_stat(axis, stat)
     x = region.astype(np.float64)
     red = 0 if axis == "channel" else 1
-    if stat == "norm":
-        return np.sqrt((x * x).sum(axis=red))
-    if stat == "absmax":
-        return np.abs(x).max(axis=red)
-    if stat == "mean":
-        return x.mean(axis=red)
-    if stat == "std":
-        return x.std(axis=red)
-    return _kurtosis(x, axis=red)
+    return STATS[stat](x, red)
 
 
 def axis_stats(cap: Capture, layer: int, axis: str, stat: str, t0: int, t1: int, d0: int, d1: int,

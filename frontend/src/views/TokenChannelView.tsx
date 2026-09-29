@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getFrame, runPath, type ActivationInfo, type AggKind, type OrderKind, type SliceMeta } from "../api";
+import { getFrame, runPath, type ActivationInfo, type SliceMeta } from "../api";
 import { channelLabel, channelTooltip, headLayout } from "../channels";
 import { Heatmap, type HeatmapHandle, type Matrix } from "../Heatmap";
 import type { Cell, Region } from "../figure";
@@ -8,20 +8,15 @@ import { DisplayControls, ExportButtons } from "../components/controls";
 import { DistributionPanel, type Region4 } from "../components/DistributionPanel";
 import { DimMinimap } from "../components/Minimap";
 import { WindowBar } from "../components/WindowBar";
+import { labelOf, useMeta } from "../meta";
 import { useStore } from "../store";
 import { fmtToken } from "../tokens";
 import { defaultWindow } from "../viewState";
 import { clampViewport, fetchWindow, windowViewport, type Viewport } from "../viewport";
 
-const ORDER_LABEL: Record<OrderKind, string> = {
-  natural: "natural index",
-  absmax: "|max| over tokens ↓",
-  std: "std over tokens ↓",
-  mean_abs: "|mean| over tokens ↓",
-};
-
 /** "Layer" mode for token activations: token x channel heatmap of one layer, plus the distribution panel. */
 export function TokenChannelView({ info }: { info: ActivationInfo }) {
+  const meta = useMeta();
   const run = useStore((s) => s.run)!;
   const layer = useStore((s) => s.layer);
   const v = useStore((s) => s.tok);
@@ -122,19 +117,18 @@ export function TokenChannelView({ info }: { info: ActivationInfo }) {
         <div className="toolbar">
           <label>
             Order
-            <select value={v.order} onChange={(e) => patchTok({ order: e.target.value as OrderKind, brush: null, cursor: null })}>
-              {(Object.keys(ORDER_LABEL) as OrderKind[]).map((o) => (
-                <option key={o} value={o}>{ORDER_LABEL[o]}</option>
+            <select value={v.order} onChange={(e) => patchTok({ order: e.target.value, brush: null, cursor: null })}>
+              {meta.orders.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
               ))}
             </select>
           </label>
           <label title="How cells are combined when the window has more entries than pixels">
             Pooling
-            <select value={v.agg} onChange={(e) => patchTok({ agg: e.target.value as AggKind })}>
-              <option value="absmax">abs-max (keeps outliers)</option>
-              <option value="mean">mean</option>
-              <option value="max">max</option>
-              <option value="min">min</option>
+            <select value={v.agg} onChange={(e) => patchTok({ agg: e.target.value })}>
+              {meta.aggs.map((a) => (
+                <option key={a.id} value={a.id}>{a.label}</option>
+              ))}
             </select>
           </label>
           <DisplayControls display={v.display} onChange={(display) => patchTok({ display })} />
@@ -164,7 +158,7 @@ export function TokenChannelView({ info }: { info: ActivationInfo }) {
             colTickPx={headDim ? 54 : undefined}
             rowTitle="token"
             colTitle={
-              (headDim ? "channel (head·dim)" : "channel") + (v.order === "natural" ? "" : `, ranked by ${ORDER_LABEL[v.order]}`)
+              (headDim ? "channel (head·dim)" : "channel") + (v.order === "natural" ? "" : `, ranked by ${labelOf(meta.orders, v.order)}`)
             }
             colorTitle="value"
             describe={describe}

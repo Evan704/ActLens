@@ -474,3 +474,9 @@ def test_load_progress_and_error_hint():
     msg, hint = explain("a/b", ValueError("Unsupported architecture for a/b (model_type='x')"))
     assert "architecture" in msg and hint
     assert LoadProgress().snapshot()["stage"] == "idle"
+
+
+def test_meta_lists_registered_capabilities(client):
+    body = client.get("/api/meta").json()
+    assert {"stats", "overview_extra", "aggs", "orders"} <= set(body)
+    assert "kurtosis" in [s["id"] for s in body["stats"]]

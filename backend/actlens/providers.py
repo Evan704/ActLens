@@ -33,6 +33,8 @@ def pick_device(requested: str | None = None) -> str:
 
 
 class NNsightProvider:
+    hub_backed = True  # loads weights from the Hugging Face Hub, so the manager prefetches them with progress
+
     """Captures one activation at a time (for all layers) with nnsight on top of a plain HF model.
 
     Everything architecture-specific lives in the `ArchAdapter` resolved for the model (see `actlens.archs`).

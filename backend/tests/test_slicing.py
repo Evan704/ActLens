@@ -214,3 +214,31 @@ def test_axis_stats_single_index_and_clip():
     cap = make_capture()
     s = slicing.axis_stats(cap, 0, "token", "std", 0, 1, 0, 16, "natural", True, top=5)
     assert s["n"] == 1 and len(s["top"]) == 1
+
+
+def test_registered_stat_is_available_everywhere():
+    """A new statistic is one `@stat` registration; the overview and the per-axis distributions pick it up."""
+    from actlens import reducers
+
+    cap = Capture("x", np.arange(2 * 4 * 6, dtype=np.float32).reshape(2, 4, 6))
+    try:
+        reducers.stat("range", "range")(lambda x, axis: x.max(axis=axis) - x.min(axis=axis))
+        assert "range" in reducers.STATS
+        out, _ = slicing.overview(cap, "range")
+        assert np.array_equal(out, np.full((2, 4), 5, dtype=np.float32))
+        assert np.array_equal(slicing.axis_stat_values(cap.arr[0], "channel", "range"), np.full(6, 18))
+        assert "range" in [s["id"] for s in reducers.capabilities()["stats"]]  # and the UI is told about it
+    finally:
+        reducers.STATS.pop("range", None)
+        reducers._INFO["stats"].pop("range", None)
+
+
+def test_capabilities_match_what_slicing_accepts():
+    from actlens.reducers import capabilities
+
+    cap = capabilities()
+    assert [s["id"] for s in cap["stats"]] == list(slicing.AXIS_STATS)
+    assert [s["id"] for s in cap["stats"]] + [e["id"] for e in cap["overview_extra"]] == list(slicing.OVERVIEW_STATS)
+    assert [a["id"] for a in cap["aggs"]] == list(slicing.AGGS)
+    assert [o["id"] for o in cap["orders"]] == list(slicing.ORDERS)
+    assert all(e["label"] and e["title"] for e in cap["stats"])
