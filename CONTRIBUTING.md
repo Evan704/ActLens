@@ -31,6 +31,12 @@ python -m build                     # dist/actlens-<version>.tar.gz and .whl
 twine upload dist/*                 # or: twine upload --repository testpypi dist/*
 ```
 
+To smoke-test a TestPyPI pre-release on a Colab GPU, open the dev notebook, set `VERSION`, and run all cells:
+
+[![Open dev notebook in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Evan704/ActLens/blob/main/colab/ActLens-dev.ipynb)
+
+(`colab/ActLens-dev.ipynb` installs from TestPyPI, checks `actlens --version`, then calls `launch()` / `stop()`. It only opens once pushed to `main`.)
+
 
 ## Adding an architecture
 
