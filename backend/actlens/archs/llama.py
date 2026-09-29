@@ -5,9 +5,7 @@ import torch
 
 from .base import ActDef, Dims, PreNormBlockAdapter, Reader, TraceCtx, get, has
 from .registry import register
-from .rope import apply_rope
-
-ROPE_ACTS = ("q_rope", "k_rope")
+from .rope import capture_rope, rope_act
 
 
 @register
@@ -18,6 +16,7 @@ class LlamaAdapter(PreNormBlockAdapter):
     norm1, attn, o_proj = "input_layernorm", "self_attn", "self_attn.o_proj"
     norm2, down_proj = "post_attention_layernorm", "mlp.down_proj"
     act_fn = "mlp.act_fn"  # the gate activation module, relative to a block
+    rotary_path = "model.rotary_emb"  # module producing (cos, sin) before the first block
 
     def probe_paths(self):
         model_paths, block_paths = super().probe_paths()
@@ -48,7 +47,7 @@ class LlamaAdapter(PreNormBlockAdapter):
         block0 = get(root, self.layers_path)[0]
         has_qk_norm = has(block0, "self_attn.q_norm") and has(block0, "self_attn.k_norm")
         # StableLM's per-head qk LayerNorm (`q_layernorm`) sits between the projection and RoPE and is not modelled
-        has_rope = has(root, "model.rotary_emb") and not has(block0, "self_attn.q_layernorm")
+        has_rope = has(root, self.rotary_path) and not has(block0, "self_attn.q_layernorm")
         act_fn_is_module = isinstance(get(block0, self.act_fn), torch.nn.Module)
         act_name = self.act_fn.rsplit(".", 1)[-1]
         nH, nKV, Dh, I = d.n_heads, d.n_kv_heads, d.head_dim, d.inter
@@ -70,12 +69,7 @@ class LlamaAdapter(PreNormBlockAdapter):
         def rope(name, heads):
             raw = (lambda b, c: c.tok(get(b, f"self_attn.{name}_norm").output)) if has_qk_norm \
                 else self.proj_out(name, d)
-
-            def read(b, c: TraceCtx):
-                x = raw(b, c)
-                x = (x if has_qk_norm else clamp(x)).reshape(c.n_tokens, heads, Dh)
-                return apply_rope(x, *c.aux["rope"]).reshape(c.n_tokens, -1)
-            return ActDef(read, heads * Dh, heads, Dh)
+            return rope_act(raw if has_qk_norm else (lambda b, c: clamp(raw(b, c))), heads, Dh)
 
         out |= {"q": proj("q", nH), "k": proj("k", nKV), "v": proj("v", nKV)}
         if has_qk_norm:
@@ -107,6 +101,4 @@ class LlamaAdapter(PreNormBlockAdapter):
         return out
 
     def prepare(self, model, ctx: TraceCtx, act: str) -> None:
-        if act in ROPE_ACTS:  # cos/sin are produced before the first block runs
-            cos, sin = model.model.rotary_emb.output
-            ctx.aux["rope"] = (ctx.host(cos), ctx.host(sin))
+        capture_rope(model, ctx, act, self.rotary_path)
