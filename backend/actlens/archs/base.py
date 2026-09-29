@@ -23,6 +23,7 @@ class Dims:
     head_dim: int
     attn_scale: float | None = None  # softmax scale applied to q.k; None means 1/sqrt(head_dim)
     residual_scale: float = 1.0  # attention/MLP outputs are multiplied by this before the residual add (Granite)
+    parallel_residual: bool = False  # x + attn(ln1 x) + mlp(ln2 x): the MLP reads the block input, no `resid_mid`
 
 
 @dataclass

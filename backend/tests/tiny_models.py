@@ -43,6 +43,9 @@ TINY = {
     "stablelm": auto("stablelm", partial_rotary_factor=0.5),  # LayerNorm, partial RoPE
     # non-default multipliers so the scaled residual adds and the custom softmax scale are exercised
     "granite": auto("granite", attention_multiplier=0.3, residual_multiplier=0.5, embedding_multiplier=2.0),
+    "gpt_neox": auto("gpt_neox"),  # parallel residual, fused per-head-interleaved QKV, partial RoPE (25%)
+    "gpt_neox_seq": auto("gpt_neox", use_parallel_residual=False, rope_parameters={
+        "rope_type": "default", "rope_theta": 10000.0, "partial_rotary_factor": 1.0}),
     "phi3": auto("phi3"),  # fused qkv_proj / gate_up_proj, GQA
     "olmo": auto("olmo", clip_qkv=0.05),  # non-parametric LayerNorm; a tiny clip_qkv makes the clamp bite
 }

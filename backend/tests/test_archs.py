@@ -40,7 +40,7 @@ def per_head(a, heads, dh):  # [L, T, heads*dh] -> [L, heads, T, dh]
 def test_registry_ids_and_shapes(prov, acts):
     T, L = len(IDS), prov.dims.n_layers
     specs = prov.activations()
-    assert {"resid_pre", "resid_mid", "resid_post", "attn_norm", "q", "k", "v", "attn_pattern", "attn_ctx", "o",
+    assert {"resid_pre", "resid_post", "attn_norm", "q", "k", "v", "attn_pattern", "attn_ctx", "o",
             "mlp_norm", "down"} <= {s.id for s in specs}
     for s in specs:
         a = acts[s.id]
@@ -66,8 +66,12 @@ def test_capture_is_deterministic_and_independent_of_other_acts(prov, acts):
 
 def test_residual_stream_identities(prov, acts):
     r = prov.dims.residual_scale
-    close(acts["resid_mid"], acts["resid_pre"] + r * acts["o"])
-    close(acts["resid_post"], acts["resid_mid"] + r * acts["down"])
+    if prov.dims.parallel_residual:  # both branches read the block input; there is no resid_mid
+        assert "resid_mid" not in acts
+        close(acts["resid_post"], acts["resid_pre"] + r * (acts["o"] + acts["down"]))
+    else:
+        close(acts["resid_mid"], acts["resid_pre"] + r * acts["o"])
+        close(acts["resid_post"], acts["resid_mid"] + r * acts["down"])
     close(acts["resid_post"][:-1], acts["resid_pre"][1:], rtol=1e-5, atol=1e-6)
 
 
