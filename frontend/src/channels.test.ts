@@ -4,7 +4,7 @@ import { actOptionLabel, channelHead, channelLabel, channelTooltip, clampHead, g
 import { groupBoundaries } from "./figure";
 
 const act = (p: Partial<ActivationInfo>): ActivationInfo => ({
-  id: "x", label: "x", group: "Attention", kind: "token", n_layers: 28, dim: 1024, layer_labels: [], n_heads: null, head_dim: null, description: "", ...p,
+  id: "x", label: "x", group: "Attention", kind: "token", n_layers: 28, dim: 1024, layer_labels: [], n_heads: null, head_dim: null, description: "", stream: false, inputs: [], ...p,
 });
 const q = act({ id: "q", label: "q — q_proj", dim: 2048, n_heads: 16, head_dim: 128 });
 const ext = { nx: 2048, ny: 40 };

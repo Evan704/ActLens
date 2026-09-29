@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { BOX_H, WIDTH, buildDiagram } from "../archGraph";
+import { BOX_H, buildDiagram, hasFlow } from "../archGraph";
 import { useStore } from "../store";
 
 /** Decoder-block diagram of the loaded model. Clicking a node opens that activation in the Layer view (the layer is kept). */
@@ -11,18 +11,19 @@ export function ArchDiagram() {
   const setMode = useStore((s) => s.setMode);
   const g = useMemo(() => buildDiagram(run), [run.model_id, run.activations]);
   const nLayers = run.model.n_layers;
+  if (!hasFlow(run)) return <aside className="arch"><p className="arch-scroll">This backend does not report the block dataflow.</p></aside>;
 
   return (
     <aside className="arch">
       <div className="arch-scroll">
-        <svg width={WIDTH} height={g.height} viewBox={`0 0 ${WIDTH} ${g.height}`} role="img" aria-label="Decoder block diagram">
+        <svg width={g.width} height={g.height} viewBox={`0 0 ${g.width} ${g.height}`} role="img" aria-label="Decoder block diagram">
           <defs>
             <marker id="arch-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
               <path d="M0 0L8 4L0 8z" className="arch-arrowhead" />
             </marker>
           </defs>
-          <rect className="arch-block" x={4} y={g.block.y0} width={WIDTH - 8} height={g.block.y1 - g.block.y0} rx={10} />
-          <text className="arch-blocklbl" x={WIDTH - 12} y={g.block.y0 + 14} textAnchor="end">
+          <rect className="arch-block" x={4} y={g.block.y0} width={g.width - 8} height={g.block.y1 - g.block.y0} rx={10} />
+          <text className="arch-blocklbl" x={g.width - 12} y={g.block.y0 + 14} textAnchor="end">
             decoder block × {nLayers} · layer {layer}
           </text>
           {g.edges.map((e, i) => (

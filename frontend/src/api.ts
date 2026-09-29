@@ -21,6 +21,10 @@ export interface ActivationInfo {
   n_heads: number | null;
   head_dim: number | null;
   description: string;
+  /** On the residual stream (the spine of the block), as opposed to inside an attention/MLP branch. */
+  stream: boolean;
+  /** Ids of the exposed activations this one is computed from: the dataflow the architecture diagram draws. */
+  inputs: ActId[];
 }
 
 export interface RunModelDims {

@@ -1,7 +1,13 @@
 /**
- * Layout of the architecture diagram: one decoder block, drawn bottom-up like the LLM Gallery figures. The graph is
- * derived from the activations the loaded model actually exposes (QK-norm, RoPE, a gate, ... appear only when the
- * adapter provides them), so it needs no per-architecture code. Pure, so it can be unit-tested.
+ * Layout of the architecture diagram: one decoder block, drawn bottom-up like the LLM Gallery figures.
+ *
+ * The graph comes entirely from the API: every activation lists the activations it is computed from (`inputs`) and
+ * whether it sits on the residual stream (`stream`). Nothing here knows an activation id or an architecture, so a
+ * model with a post-norm, a sandwich norm, a parallel residual, no RoPE, ... is drawn correctly as soon as its
+ * adapter exposes the right activations. Pure, so it can be unit-tested.
+ *
+ * Rows: a node sits one row above its highest input, so independent branches share rows. Columns: a node is centred
+ * under its inputs; branches that occupy the same rows (a parallel residual) are placed side by side.
  */
 import type { ActivationInfo, RunInfo } from "./api";
 
@@ -10,8 +16,9 @@ export const BOX_H = 34;
 export const STREAM_W = 78;
 export const PITCH = 50;
 export const STREAM_X = 45;
-export const COL_X = [128, 226, 324];
-export const WIDTH = 372;
+const COL_X0 = 128;
+const COL_W = 98;
+const MARGIN = 10;
 
 export interface GNode {
   key: string;
@@ -31,141 +38,140 @@ export interface Diagram {
   /** SVG path data; `arrow` edges end with an arrowhead. */
   edges: { d: string; arrow: boolean }[];
   block: { y0: number; y1: number };
+  width: number;
   height: number;
 }
 
-const has = (run: RunInfo, id: string) => run.activations.some((a) => a.id === id);
-const info = (run: RunInfo, id: string) => run.activations.find((a) => a.id === id);
-
-function sub(a: ActivationInfo | undefined): string | undefined {
-  if (!a) return undefined;
-  if (a.kind === "attn") return `${a.n_heads ?? "H"}×T×T`;
-  return `T×${a.dim}`;
+function push<K, V>(m: Map<K, V[]>, key: K, value: V) {
+  const list = m.get(key);
+  if (list) list.push(value);
+  else m.set(key, [value]);
 }
 
-export function buildDiagram(run: RunInfo): Diagram {
-  // rows are counted upwards from 0 (the embedding); converted to y at the end
-  const pos = new Map<string, { col: number; row: number; stream: boolean }>();
-  const put = (id: string, col: number, row: number, stream = false) => {
-    if (id === "embed" || id === "final" || id === "head" || has(run, id)) pos.set(id, { col, row, stream });
+const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
+
+/** Row of each activation: 1 + the highest row among its inputs (the block input, which has none, is row 1). */
+function rowsOf(acts: ActivationInfo[]): Map<string, number> {
+  const byId = new Map(acts.map((a) => [a.id, a]));
+  const rows = new Map<string, number>();
+  const visiting = new Set<string>();
+  const row = (id: string): number => {
+    const known = rows.get(id);
+    if (known !== undefined) return known;
+    if (visiting.has(id)) return 0; // a cycle cannot be drawn upwards; ignore the back edge
+    visiting.add(id);
+    const ins = (byId.get(id)?.inputs ?? []).filter((i) => byId.has(i));
+    const r = ins.length ? 1 + Math.max(...ins.map(row)) : 1;
+    visiting.delete(id);
+    rows.set(id, r);
+    return r;
   };
-  const edges: [string, string, "src" | "dst"][] = [];
-  const link = (a: string, b: string, turn: "src" | "dst" = "dst") => {
-    if (pos.has(a) && pos.has(b)) edges.push([a, b, turn]);
-  };
+  acts.forEach((a) => row(a.id));
+  return rows;
+}
 
-  put("embed", -1, 0, true);
-  put("resid_pre", -1, 1, true);
-  let row = 2;
+/** The branches: connected groups of non-stream activations, each in API order. */
+function branchesOf(acts: ActivationInfo[]): ActivationInfo[][] {
+  const inBranch = new Set(acts.filter((a) => !a.stream).map((a) => a.id));
+  const root = new Map([...inBranch].map((id) => [id, id]));
+  const find = (id: string): string => (root.get(id) === id ? id : find(root.get(id)!));
+  for (const a of acts) for (const i of a.inputs) if (inBranch.has(a.id) && inBranch.has(i)) root.set(find(a.id), find(i));
+  const groups = new Map<string, ActivationInfo[]>();
+  for (const a of acts) if (inBranch.has(a.id)) push(groups, find(a.id), a);
+  return [...groups.values()];
+}
 
-  // attention branch
-  put("attn_norm", 1, row);
-  const qc = ["q", "q_norm", "q_rope"].filter((i) => has(run, i));
-  const kc = ["k", "k_norm", "k_rope"].filter((i) => has(run, i));
-  const L = Math.max(qc.length, kc.length, has(run, "v") ? 1 : 0);
-  qc.forEach((id, i) => put(id, 0, row + 1 + i));
-  kc.forEach((id, i) => put(id, 1, row + 1 + i));
-  put("v", 2, row + 1);
-  let top = row + L;
-  if (has(run, "attn_pattern")) put("attn_pattern", 0.5, ++top);
-  put("attn_ctx", 1, ++top);
-  put("o", 1, ++top);
-  const qLast = qc[qc.length - 1], kLast = kc[kc.length - 1];
-  for (const id of ["q", "k", "v"]) link("attn_norm", id, "src");
-  for (const c of [qc, kc]) for (let i = 1; i < c.length; i++) link(c[i - 1], c[i]);
-  if (pos.has("attn_pattern")) {
-    if (qLast) link(qLast, "attn_pattern");
-    if (kLast) link(kLast, "attn_pattern");
-    link("attn_pattern", "attn_ctx");
-  } else if (qLast) link(qLast, "attn_ctx");
-  link("v", "attn_ctx");
-  link("attn_ctx", "o");
-  const attnIn = pos.has("attn_norm") ? "attn_norm" : null;
-  const attnOut = pos.has("o") ? "o" : null;
-  row = top + 1;
-  put("resid_mid", -1, row, true);
-
-  // MLP branch
-  row++;
-  put("mlp_norm", 1, row);
-  const gated = has(run, "gate");
-  if (gated) {
-    put("gate", 0, row + 1);
-    put("up", 2, row + 1);
-    let t = row + 1;
-    if (has(run, "silu")) put("silu", 0, ++t);
-    put("swiglu", 1, ++t);
-    put("down", 1, ++t);
-    link("mlp_norm", "gate", "src");
-    link("mlp_norm", "up", "src");
-    link("gate", "silu");
-    link(pos.has("silu") ? "silu" : "gate", "swiglu");
-    link("up", "swiglu");
-    link("swiglu", "down");
-    top = t;
-  } else {
-    const seq = ["up", "mlp_act", "down"].filter((i) => has(run, i));
-    seq.forEach((id, i) => put(id, 1, row + 1 + i));
-    [ "mlp_norm", ...seq].forEach((id, i, a) => i && link(a[i - 1], id));
-    top = row + seq.length;
+/** Lane (a float column index) of each activation of one branch: centred under its inputs, a lane apart in a row. */
+function lanesOf(branch: ActivationInfo[], rows: Map<string, number>): Map<string, number> {
+  const lane = new Map<string, number>();
+  const byRow = new Map<number, ActivationInfo[]>();
+  for (const a of branch) push(byRow, rows.get(a.id)!, a);
+  for (const r of [...byRow.keys()].sort((p, q) => p - q)) {
+    const items = byRow.get(r)!.map((a) => {
+      const xs = a.inputs.filter((i) => lane.has(i)).map((i) => lane.get(i)!);
+      return { id: a.id, want: xs.length ? mean(xs) : null };
+    });
+    items.sort((p, q) => (p.want ?? -Infinity) - (q.want ?? -Infinity)); // stable: ties keep API order
+    const placed: number[] = [];
+    items.forEach((it, i) => placed.push(Math.max(it.want ?? 0, i ? placed[i - 1] + 1 : -Infinity)));
+    const wants = items.flatMap((it, i) => (it.want === null ? [] : [placed[i] - it.want]));
+    const shift = wants.length ? mean(wants) : 0; // re-centre the row where its members wanted to be
+    items.forEach((it, i) => lane.set(it.id, placed[i] - shift));
   }
-  const mlpIn = pos.has("mlp_norm") ? "mlp_norm" : null;
-  const mlpOut = pos.has("down") ? "down" : null;
-  row = top + 1;
-  put("resid_post", -1, row, true);
-  const blockTop = row;
-  put("final", -1, row + 1.4, true);
-  put("head", -1, row + 2.4, true);
-  const maxRow = row + 2.4;
+  return lane;
+}
 
-  const height = (maxRow + 1) * PITCH + 8;
-  const yOf = (r: number) => height - 4 - (r + 0.5) * PITCH;
+/** Whether the backend reported a block dataflow (an older backend does not, and there is nothing to draw). */
+export const hasFlow = (run: RunInfo) => run.activations.some((a) => (a.inputs ?? []).length > 0);
+
+export function buildDiagram(run: RunInfo): Diagram {
+  const acts = run.activations.map((a) => ({ ...a, inputs: a.inputs ?? [], stream: a.stream ?? false }));
+  const rows = rowsOf(acts);
+  const streamActs = acts.filter((a) => a.stream);
+  const topRow = Math.max(1, ...streamActs.map((a) => rows.get(a.id)!));
+
+  // columns: each branch gets its own lanes; branches that share rows are put next to each other
+  const x = new Map<string, number>();
+  const placed: { lo: number; hi: number; right: number }[] = [];
+  for (const br of branchesOf(acts)) {
+    const lane = lanesOf(br, rows);
+    const ls = [...lane.values()];
+    const r = br.map((a) => rows.get(a.id)!);
+    const lo = Math.min(...r), hi = Math.max(...r), minLane = Math.min(...ls);
+    const left = Math.max(0, ...placed.filter((p) => p.lo <= hi && lo <= p.hi).map((p) => p.right + 1));
+    for (const [id, l] of lane) x.set(id, COL_X0 + (left + l - minLane) * COL_W);
+    placed.push({ lo, hi, right: left + Math.max(...ls) - minLane });
+  }
+  const width = Math.max(COL_X0, ...x.values()) + BOX_W / 2 + MARGIN;
+
+  const height = (topRow + 2.4 + 1) * PITCH + 8;
+  const yOf = (row: number) => height - 4 - (row + 0.5) * PITCH;
+
   const nodes: GNode[] = [];
   const at = new Map<string, GNode>();
-  const fixed: Record<string, [string, string]> = {
-    embed: ["embedding", "tokens → T×D"],
-    final: ["final norm", ""],
-    head: ["lm_head", "→ logits"],
-  };
-  for (const [key, p] of pos) {
-    const a = info(run, key);
-    const f = fixed[key];
-    const n: GNode = {
-      key, actId: f ? null : key, label: f ? f[0] : key, sub: f ? f[1] || undefined : sub(a),
-      x: p.col < 0 ? STREAM_X : p.col === 0.5 ? (COL_X[0] + COL_X[1]) / 2 : COL_X[p.col],
-      y: yOf(p.row), w: p.stream ? STREAM_W : BOX_W, stream: p.stream,
-      title: a ? `${a.label}\n${a.description}` : f ? f[0] : key,
-    };
-    nodes.push(n);
-    at.set(key, n);
+  const add = (n: GNode) => (nodes.push(n), at.set(n.key, n));
+  const fixed = (key: string, label: string, sub: string | undefined, row: number) =>
+    add({ key, actId: null, label, sub, x: STREAM_X, y: yOf(row), w: STREAM_W, stream: true, title: label });
+  fixed("embed", "embedding", "tokens → T×D", 0);
+  for (const a of acts) {
+    add({
+      key: a.id, actId: a.id, label: a.id, sub: a.kind === "attn" ? `${a.n_heads ?? "H"}×T×T` : `T×${a.dim}`,
+      x: a.stream ? STREAM_X : x.get(a.id)!, y: yOf(rows.get(a.id)!), w: a.stream ? STREAM_W : BOX_W,
+      stream: a.stream, title: `${a.label}\n${a.description}`,
+    });
+  }
+  fixed("final", "final norm", undefined, topRow + 1.4);
+  fixed("head", "lm_head", "→ logits", topRow + 2.4);
+
+  const top = (n: GNode) => n.y - BOX_H / 2, bot = (n: GNode) => n.y + BOX_H / 2;
+  const edges: Diagram["edges"] = [];
+  const arrow = (d: string) => edges.push({ d, arrow: true });
+  const fanOut = new Map<string, number>();
+  for (const a of acts) for (const i of a.inputs) fanOut.set(i, (fanOut.get(i) ?? 0) + 1);
+
+  // the residual stream is a spine through the stream nodes in display order; branches tap it and add back into it
+  const spine = ["embed", ...streamActs.map((a) => a.id), "final", "head"];
+  for (let i = 1; i < spine.length; i++) {
+    const s = at.get(spine[i - 1])!, t = at.get(spine[i])!;
+    arrow(`M${s.x} ${top(s)}V${bot(t)}`);
+  }
+  for (const a of acts) {
+    const t = at.get(a.id)!;
+    for (const s of a.inputs.map((i) => at.get(i))) {
+      if (!s || (s.stream && t.stream)) continue; // stream-to-stream is the spine
+      if (s.stream) arrow(`M${STREAM_X} ${bot(t) + 8}H${t.x}V${bot(t)}`);
+      else if (t.stream) arrow(`M${s.x} ${top(s)}V${t.y}H${STREAM_X + STREAM_W / 2}`);
+      else if (s.x === t.x) arrow(`M${s.x} ${top(s)}V${bot(t)}`);
+      else {
+        const my = (fanOut.get(s.key) ?? 0) > 1 ? top(s) - 8 : bot(t) + 8; // bend near the source when it fans out
+        arrow(`M${s.x} ${top(s)}V${my}H${t.x}V${bot(t)}`);
+      }
+    }
   }
 
-  const paths: { d: string; arrow: boolean }[] = [];
-  const top_ = (n: GNode) => n.y - BOX_H / 2, bot = (n: GNode) => n.y + BOX_H / 2;
-  for (const [a, b, turn] of edges) {
-    const s = at.get(a)!, t = at.get(b)!;
-    const my = turn === "src" ? top_(s) - 8 : bot(t) + 8;
-    paths.push({ d: `M${s.x} ${top_(s)}V${my}H${t.x}V${bot(t)}`, arrow: true });
-  }
-  // residual stream: embedding → resid_pre → resid_mid → resid_post → final norm → lm_head
-  const stream = ["embed", "resid_pre", "resid_mid", "resid_post", "final", "head"].filter((k) => at.has(k));
-  for (let i = 1; i < stream.length; i++) {
-    const s = at.get(stream[i - 1])!, t = at.get(stream[i])!;
-    paths.push({ d: `M${s.x} ${top_(s)}V${bot(t)}`, arrow: true });
-  }
-  // branches read from the stream just before their norm and add back into the next stream node
-  const branch = (inKey: string | null, outKey: string | null, fromKey: string, toKey: string) => {
-    if (inKey && at.has(fromKey)) {
-      const n = at.get(inKey)!;
-      paths.push({ d: `M${STREAM_X} ${bot(n) + 8}H${n.x}V${bot(n)}`, arrow: true });
-    }
-    if (outKey && at.has(toKey)) {
-      const o = at.get(outKey)!, t = at.get(toKey)!;
-      paths.push({ d: `M${o.x} ${top_(o)}V${t.y}H${STREAM_X + STREAM_W / 2}`, arrow: true });
-    }
+  const rowOf = (a: ActivationInfo | undefined, fallback: number) => (a ? rows.get(a.id)! : fallback);
+  return {
+    nodes, edges, width, height,
+    block: { y0: yOf(rowOf(streamActs.at(-1), topRow)) - PITCH / 2, y1: yOf(rowOf(streamActs[0], 1)) + PITCH / 2 },
   };
-  branch(attnIn, attnOut, "resid_pre", "resid_mid");
-  branch(mlpIn, mlpOut, "resid_mid", "resid_post");
-
-  return { nodes, edges: paths, block: { y0: yOf(blockTop) - PITCH / 2, y1: yOf(1) + PITCH / 2 }, height };
 }

@@ -7,7 +7,7 @@ import {
 
 const labels = (n: number) => Array.from({ length: n }, (_, i) => String(i));
 const act = (p: Partial<ActivationInfo>): ActivationInfo => ({
-  id: "x", label: "x", group: "Residual", kind: "token", n_layers: 28, dim: 1024, layer_labels: labels(28), n_heads: null, head_dim: null, description: "", ...p,
+  id: "x", label: "x", group: "Residual", kind: "token", n_layers: 28, dim: 1024, layer_labels: labels(28), n_heads: null, head_dim: null, description: "", stream: false, inputs: [], ...p,
 });
 const resid = act({ id: "resid_post", label: "resid_post" });
 const q = act({ id: "q", group: "Attention", dim: 2048, n_heads: 16, head_dim: 128 });

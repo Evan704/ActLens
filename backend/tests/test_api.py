@@ -136,8 +136,10 @@ def test_run_response_shape_and_no_capture(client):
     assert list(acts) == ["resid_pre", "resid_post", "q", "gate", "attn_pattern"]  # display order, only supported ids
     assert acts["q"] == {
         "id": "q", "label": "q — q_proj", "group": "Attention", "kind": "token", "n_layers": L, "dim": NH * DH,
-        "layer_labels": ["0", "1", "2"], "n_heads": NH, "head_dim": DH, "description": acts["q"]["description"]}
-    assert acts["resid_pre"]["group"] == "Residual" and acts["resid_pre"]["n_heads"] is None
+        "layer_labels": ["0", "1", "2"], "n_heads": NH, "head_dim": DH, "description": acts["q"]["description"],
+        "stream": False, "inputs": []}  # the fake provider declares no dataflow
+    assert acts["resid_pre"]["group"] == "Residual" and acts["resid_pre"]["stream"] is True
+    assert acts["resid_pre"]["n_heads"] is None
     assert acts["gate"]["group"] == "MLP" and acts["gate"]["head_dim"] is None
     ap = acts["attn_pattern"]
     assert ap["kind"] == "attn" and ap["dim"] is None and ap["n_heads"] == NH and ap["head_dim"] is None

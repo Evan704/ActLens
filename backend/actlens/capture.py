@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .flow import STREAM
+
 GROUPS = ("Residual", "Attention", "MLP")
 
 # id -> (group, label, description). Order = display order. Which of these a model exposes, and under what
@@ -56,6 +58,12 @@ class ActivationSpec:
     n_heads: int | None = None  # heads on this tensor when the channel axis is heads x head_dim
     head_dim: int | None = None
     description: str = ""
+    inputs: tuple[str, ...] = ()  # exposed activations this one is computed from (see `flow.resolve_flow`)
+
+    @property
+    def stream(self) -> bool:
+        """Whether this is a residual-stream node (the spine of the block) rather than something computed inside a branch."""
+        return self.id in STREAM
 
     def info(self) -> dict:
         """The `ActivationInfo` object of the HTTP API."""
@@ -64,14 +72,16 @@ class ActivationSpec:
             "n_layers": self.n_layers, "dim": self.channels,
             "layer_labels": [str(i) for i in range(self.n_layers)],
             "n_heads": self.n_heads, "head_dim": self.head_dim, "description": self.description,
+            "stream": self.stream, "inputs": list(self.inputs),
         }
 
 
 def make_spec(act: str, n_layers: int, channels: int | None = None, n_heads: int | None = None,
-              head_dim: int | None = None, label: str | None = None, description: str | None = None) -> ActivationSpec:
+              head_dim: int | None = None, label: str | None = None, description: str | None = None,
+              inputs: tuple[str, ...] = ()) -> ActivationSpec:
     group, default_label, default_desc = REGISTRY[act]
     return ActivationSpec(act, label or default_label, group, "attn" if act == ATTN_ACT else "token", channels,
-                          n_layers, n_heads, head_dim, description or default_desc)
+                          n_layers, n_heads, head_dim, description or default_desc, inputs)
 
 
 @dataclass

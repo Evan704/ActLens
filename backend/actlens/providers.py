@@ -9,6 +9,7 @@ import torch
 
 from .archs import TraceCtx, get, resolve_adapter
 from .capture import ACT_IDS, ActivationSpec, make_spec
+from .flow import resolve_flow
 
 
 class ActivationProvider(Protocol):
@@ -80,9 +81,9 @@ class NNsightProvider:
 
     # ----- registry -----
     def activations(self) -> list[ActivationSpec]:
-        L = self.dims.n_layers
+        L, flow = self.dims.n_layers, resolve_flow(set(self._defs))
         return [make_spec(a, L, self._defs[a].channels, self._defs[a].n_heads, self._defs[a].head_dim,
-                          self._defs[a].label, self._defs[a].description)
+                          self._defs[a].label, self._defs[a].description, flow[a])
                 for a in ACT_IDS if a in self._defs]
 
     # ----- tokenization -----
