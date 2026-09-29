@@ -145,3 +145,14 @@ class ModelManager:
         if run.run_id not in self.runs:  # run was evicted while we were capturing
             self.cache.drop_run(run.run_id)
         return cap
+
+    def logit_lens(self, run: Run, cap: Capture, pos: int, k: int, target: int | None) -> dict:
+        """Blocking: unembed one token position of a residual capture at every layer, on the model thread."""
+        provider = self.provider
+        if provider is None or run.run_id not in self.runs or provider.model_id != run.model_id:
+            raise NotFound("Unknown run (it may have been evicted); run the prompt again")
+        resid = cap.arr[:, pos, :]
+        try:
+            return self.executor.submit(provider.logit_lens, resid, k, target).result()
+        except ValueError as e:
+            raise BadRequest(str(e))

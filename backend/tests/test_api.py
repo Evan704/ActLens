@@ -58,6 +58,18 @@ class FakeProvider:
         c = {s.id: s.channels for s in self.activations()}[act]
         return rng.normal(size=(L, T, c)).astype(np.float32)
 
+    def logit_lens(self, resid, k, target):
+        V = 20
+        w = np.random.default_rng(0).normal(size=(D, V)).astype(np.float32)
+        logp = resid @ w
+        logp = logp - np.log(np.exp(logp).sum(-1, keepdims=True))
+        ids = np.argsort(-logp, axis=-1)[:, :k]
+        out = {"ids": ids.tolist(), "logprobs": np.take_along_axis(logp, ids, -1).tolist(),
+               "entropy": [0.0] * len(resid), "tokens": [[f"t{i}" for i in row] for row in ids]}
+        if target is not None:
+            out["target"] = {"id": target, "logprob": logp[:, target].tolist(), "rank": [1] * len(resid)}
+        return out
+
     def close(self):
         pass
 
@@ -480,3 +492,15 @@ def test_meta_lists_registered_capabilities(client):
     body = client.get("/api/meta").json()
     assert {"stats", "overview_extra", "aggs", "orders"} <= set(body)
     assert "kurtosis" in [s["id"] for s in body["stats"]]
+
+
+def test_logit_lens_endpoint(client):
+    run_id = client.post("/api/run", json={"text": "hello world"}).json()["run_id"]
+    r = client.get(f"/api/run/{run_id}/logit_lens", params={"k": 3, "target": 5})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["act"] == "resid_post" and body["pos"] == 10  # -1 resolves to the last of 11 tokens
+    assert len(body["ids"]) == L and len(body["ids"][0]) == 3 and body["target"]["id"] == 5
+    assert client.get(f"/api/run/{run_id}/logit_lens", params={"pos": 0}).json()["pos"] == 0
+    assert client.get(f"/api/run/{run_id}/logit_lens", params={"pos": 11}).status_code == 400
+    assert client.get(f"/api/run/{run_id}/logit_lens", params={"act": "q"}).status_code == 400

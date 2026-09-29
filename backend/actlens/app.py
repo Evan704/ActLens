@@ -18,6 +18,7 @@ from .errors import ActLensError, BadRequest
 from .manager import DEFAULT_CACHE_MB, MAX_RUNS, ModelManager, cache_budget_bytes  # noqa: F401  (re-exported)
 from .wire import frame_response
 
+LENS_ACTS = ("resid_pre", "resid_mid", "resid_post")
 DEFAULT_MODEL = "Qwen/Qwen3-0.6B"
 PRESET_MODELS = [
     {"id": "Qwen/Qwen3-0.6B", "label": "Qwen3-0.6B"},
@@ -148,6 +149,19 @@ def create_app(manager: ModelManager | None = None, autoload: bool = True, model
                    clip: bool = False, top: int = 10, bins: int = 64):
         cap = token_capture(run_id, act, layer)
         return guarded(slicing.axis_stats, cap, layer, axis, stat, t0, t1, d0, d1, order, clip, top, bins)
+
+    @app.get("/api/run/{run_id}/logit_lens")
+    def logit_lens(run_id: str, act: str = "resid_post", pos: int = -1, k: int = Query(10, ge=1, le=100),
+                   target: int | None = None):
+        """Logit lens: unembed the residual stream of token `pos` (negative counts from the end) after every layer."""
+        if act not in LENS_ACTS:
+            raise BadRequest(f"logit lens reads the residual stream; expected one of {list(LENS_ACTS)}")
+        cap = token_capture(run_id, act)
+        if not -cap.n_tokens <= pos < cap.n_tokens:
+            raise BadRequest(f"pos {pos} out of range for {cap.n_tokens} tokens")
+        pos %= cap.n_tokens
+        out = mgr.logit_lens(mgr.get(run_id), cap, pos, k, target)
+        return {"act": act, "pos": pos, "layer_labels": cap.layer_labels(), **out}
 
     @app.get("/api/run/{run_id}/attn")
     def attn(run_id: str, layer: int, head: int = -1, q0: int = 0, q1: int = 100000, k0: int = 0, k1: int = 100000,

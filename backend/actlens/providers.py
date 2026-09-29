@@ -19,6 +19,7 @@ class ActivationProvider(Protocol):
     def tokenize(self, text: str, max_tokens: int) -> tuple[list[int], list[str], bool]: ...
     def activations(self) -> list[ActivationSpec]: ...
     def capture(self, token_ids: list[int], act: str) -> np.ndarray: ...
+    def logit_lens(self, resid: np.ndarray, k: int, target: int | None) -> dict: ...
     def close(self) -> None: ...
 
 
@@ -123,6 +124,42 @@ class NNsightProvider:
         if saved[0] is None:
             raise RuntimeError("Model did not return attention weights (needs attn_implementation='eager')")
         return torch.stack(list(saved), dim=0).numpy()
+
+    # ----- logit lens -----
+    _FINAL_NORMS = ("norm", "ln_f", "final_layer_norm", "final_layernorm", "norm_f")
+
+    def _unembed_parts(self):
+        root = self.model._model
+        head = root.get_output_embeddings()
+        base = root.base_model
+        norm = next((getattr(base, n) for n in self._FINAL_NORMS if isinstance(getattr(base, n, None), torch.nn.Module)), None)
+        if head is None or norm is None:
+            raise ValueError("this model has no recognizable final norm / output embedding to unembed with")
+        return norm, head, getattr(root.config, "final_logit_softcapping", None)
+
+    def logit_lens(self, resid: np.ndarray, k: int, target: int | None = None) -> dict:
+        """Unembed residual vectors [L, D] (one token position, one per layer) with the model's own final norm and
+        output head (plus final logit soft-capping): top-`k` tokens per layer and, if `target` is given, its
+        probability and rank. Must run on the model thread."""
+        norm, head, cap = self._unembed_parts()
+        with torch.no_grad():
+            x = torch.from_numpy(np.ascontiguousarray(resid)).to(self.device, next(norm.parameters(), head.weight).dtype)
+            logits = head(norm(x)).float()
+            if cap:
+                logits = cap * torch.tanh(logits / cap)
+            logp = torch.log_softmax(logits, dim=-1)
+            k = min(k, logp.shape[-1])
+            top = logp.topk(k, dim=-1)
+            out = {"ids": top.indices.cpu().tolist(), "logprobs": top.values.cpu().tolist(),
+                   "entropy": (-(logp.exp() * logp).sum(-1)).cpu().tolist()}
+            if target is not None:
+                if not 0 <= target < logp.shape[-1]:
+                    raise ValueError(f"target token id {target} out of range for vocab of {logp.shape[-1]}")
+                tl = logp[:, target]
+                out["target"] = {"id": target, "logprob": tl.cpu().tolist(),
+                                 "rank": (logp > tl[:, None]).sum(-1).add(1).cpu().tolist()}
+        out["tokens"] = [[self.tokenizer.decode([i]) for i in row] for row in out["ids"]]
+        return out
 
     def close(self) -> None:
         del self.model

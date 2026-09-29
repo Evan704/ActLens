@@ -84,3 +84,28 @@ def test_apply_rope_partial_rotary_leaves_tail_untouched():
     assert out.shape == x.shape
     torch.testing.assert_close(out[..., 4:], x[..., 4:])
     assert not torch.allclose(out[..., :4], x[..., :4])
+
+
+@pytest.mark.parametrize("name", ["llama", "gpt2", "gemma", "gemma2", "gpt_neox"])
+def test_logit_lens_of_the_last_layer_is_the_models_own_output(name):
+    """resid_post of the final block, unembedded, is exactly the model's logits (final norm, tied head, soft-cap)."""
+    model = tiny.TINY[name]()
+    p = provider(model)
+    p.tokenizer = SimpleNamespace(decode=lambda ids: f"<{ids[0]}>")  # the tiny models have no tokenizer
+    ids = [3, 14, 15, 9, 26, 5]
+    resid = p.capture(ids, "resid_post")[:, -1, :]
+    out = p.logit_lens(resid, 5, target=ids[0])
+    with torch.no_grad():
+        ref = torch.log_softmax(model(torch.tensor([ids])).logits[0, -1].float(), -1)
+    assert out["ids"][-1] == ref.topk(5).indices.tolist()
+    assert torch.allclose(torch.tensor(out["logprobs"][-1]), ref.topk(5).values, atol=1e-4)
+    assert len(out["ids"]) == tiny.LAYERS and len(out["tokens"][0]) == 5
+    assert out["target"]["logprob"][-1] == pytest.approx(ref[ids[0]].item(), abs=1e-4)
+    assert out["target"]["rank"][-1] == int((ref > ref[ids[0]]).sum()) + 1
+
+
+def test_logit_lens_rejects_out_of_range_target():
+    p = provider(tiny.llama())
+    p.tokenizer = SimpleNamespace(decode=lambda ids: "")
+    with pytest.raises(ValueError, match="out of range"):
+        p.logit_lens(p.capture([1, 2, 3], "resid_post")[:, -1, :], 3, target=10**6)
