@@ -41,5 +41,7 @@ TINY = {
     # real Gemma has head_dim (256) != hidden/heads and MQA on the 2B model: pin both here
     "gemma": auto("gemma", head_dim=16, num_key_value_heads=1),
     "stablelm": auto("stablelm", partial_rotary_factor=0.5),  # LayerNorm, partial RoPE
+    # non-default multipliers so the scaled residual adds and the custom softmax scale are exercised
+    "granite": auto("granite", attention_multiplier=0.3, residual_multiplier=0.5, embedding_multiplier=2.0),
     "olmo": auto("olmo", clip_qkv=0.05),  # non-parametric LayerNorm; a tiny clip_qkv makes the clamp bite
 }

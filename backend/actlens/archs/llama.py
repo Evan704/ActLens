@@ -1,4 +1,4 @@
-"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, OLMo, StableLM, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
+"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, OLMo, StableLM, Granite, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
 from __future__ import annotations
 
 import torch
@@ -13,7 +13,7 @@ ROPE_ACTS = ("q_rope", "k_rope")
 @register
 class LlamaAdapter(PreNormBlockAdapter):
     name = "llama"
-    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma", "olmo", "stablelm")
+    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma", "olmo", "stablelm", "granite")
     layers_path = "model.layers"
     norm1, attn, o_proj = "input_layernorm", "self_attn", "self_attn.o_proj"
     norm2, down_proj = "post_attention_layernorm", "mlp.down_proj"
@@ -30,7 +30,9 @@ class LlamaAdapter(PreNormBlockAdapter):
         return Dims(n_layers=len(get(root, self.layers_path)), hidden=cfg.hidden_size,
                     inter=cfg.intermediate_size, n_heads=n_heads,
                     n_kv_heads=getattr(cfg, "num_key_value_heads", None) or n_heads,
-                    head_dim=getattr(cfg, "head_dim", None) or cfg.hidden_size // n_heads)
+                    head_dim=getattr(cfg, "head_dim", None) or cfg.hidden_size // n_heads,
+                    attn_scale=getattr(cfg, "attention_multiplier", None),  # Granite
+                    residual_scale=getattr(cfg, "residual_multiplier", 1.0))
 
     def acts(self, root, d: Dims) -> dict[str, ActDef]:
         block0 = get(root, self.layers_path)[0]

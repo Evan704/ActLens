@@ -64,9 +64,10 @@ def test_capture_is_deterministic_and_independent_of_other_acts(prov, acts):
         np.testing.assert_array_equal(prov.capture(IDS, act), acts[act])
 
 
-def test_residual_stream_identities(acts):
-    close(acts["resid_mid"], acts["resid_pre"] + acts["o"])
-    close(acts["resid_post"], acts["resid_mid"] + acts["down"])
+def test_residual_stream_identities(prov, acts):
+    r = prov.dims.residual_scale
+    close(acts["resid_mid"], acts["resid_pre"] + r * acts["o"])
+    close(acts["resid_post"], acts["resid_mid"] + r * acts["down"])
     close(acts["resid_post"][:-1], acts["resid_pre"][1:], rtol=1e-5, atol=1e-6)
 
 
@@ -84,7 +85,8 @@ def test_attention_pattern_is_softmax_of_the_captured_q_and_k(prov, acts):
     Q, K = per_head(q, d.n_heads, d.head_dim), per_head(k, d.n_kv_heads, d.head_dim)
     K = K.repeat_interleave(d.n_heads // d.n_kv_heads, dim=1)
     T = Q.shape[2]
-    scores = (Q @ K.transpose(-1, -2) / math.sqrt(d.head_dim)).masked_fill(
+    scale = 1 / math.sqrt(d.head_dim) if d.attn_scale is None else d.attn_scale
+    scores = (Q @ K.transpose(-1, -2) * scale).masked_fill(
         ~torch.tril(torch.ones(T, T, dtype=torch.bool)), float("-inf"))
     np.testing.assert_allclose(acts["attn_pattern"].astype(np.float64), scores.softmax(-1).numpy(), atol=2e-3)
 
