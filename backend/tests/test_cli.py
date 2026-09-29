@@ -23,3 +23,11 @@ def test_version_flag(capsys):
 def test_arch_module_flag_is_repeatable():
     a = cli.build_parser().parse_args(["--arch-module", "pkg.arch", "--arch-module", "/x/y.py"])
     assert a.arch_module == ["pkg.arch", "/x/y.py"]
+
+
+def test_token_flag(monkeypatch):
+    monkeypatch.delenv("ACTLENS_TOKEN", raising=False)
+    p = cli.build_parser()
+    assert p.parse_args([]).token is None
+    assert p.parse_args(["--token"]).token == "auto"
+    assert p.parse_args(["--token", "abc"]).token == "abc"

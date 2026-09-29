@@ -48,20 +48,27 @@ You can load more models from the UI at any time.
 
 ### Google Colab
 
-Start the server in the background, then open it through Colab's port proxy:
+No local GPU? Run the model on a free Colab GPU and view the visualization in your own browser.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Evan704/ActLens/blob/main/colab/ActLens.ipynb)
+
+1. Open the notebook and pick a GPU runtime (Runtime → Change runtime type → T4 GPU).
+2. Run the first cell. It installs ActLens, starts the server and opens a Cloudflare tunnel.
+3. Click the **Open ActLens** link it prints. The UI opens in your browser; keep the Colab tab open while you use it.
+
+Or in any notebook:
 
 ```python
-!pip install -q actlens
-
-import subprocess
-subprocess.Popen(["actlens", "--device", "cuda", "--dtype", "float16", "--port", "8000"],
-                 stdout=open("actlens.log", "w"), stderr=subprocess.STDOUT)
-
-from google.colab import output
-output.serve_kernel_port_as_window(8000)
+!pip install -q -U actlens
+from actlens.colab import launch
+launch(model="Qwen/Qwen3-0.6B", dtype="float16")
 ```
 
-Check `actlens.log` if the page does not load; the first start downloads the model.
+The link contains a random access token, and the server rejects requests without it. Anyone who has the full link can use
+your session, so do not share it. Use `actlens.colab.stop()` to shut everything down. If the page does not load, check
+`actlens.log`.
+
+You can also protect a server of your own with `actlens --token` (generates a token and prints the URL) or `--token VALUE`.
 
 ## Using the viewer
 

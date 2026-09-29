@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import hmac
 import json
 import os
 import threading
@@ -14,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -33,6 +34,7 @@ PRESET_MODELS = [
     {"id": "openai-community/gpt2", "label": "GPT-2"},
 ]
 MAX_RUNS = 3
+TOKEN_COOKIE = "actlens_token"
 DEFAULT_CACHE_MB = 2048
 CORPUS = json.loads((Path(__file__).parent / "corpus.json").read_text())
 _PACKAGED_DIST = Path(__file__).parent / "static"  # bundled into the wheel
@@ -160,7 +162,7 @@ class RunRequest(BaseModel):
 
 
 def create_app(manager: ModelManager | None = None, autoload: bool = True, model_id: str = DEFAULT_MODEL,
-               device: str = "auto", dtype: str = "float32") -> FastAPI:
+               device: str = "auto", dtype: str = "float32", token: str | None = None) -> FastAPI:
     mgr = manager or ModelManager()
 
     @asynccontextmanager
@@ -171,6 +173,27 @@ def create_app(manager: ModelManager | None = None, autoload: bool = True, model
 
     app = FastAPI(title="ActLens", lifespan=lifespan)
     app.state.manager = mgr
+
+    if token:
+        # Access token for a server that is reachable from outside (e.g. a tunnel from Colab). Open
+        # `/?token=...` once: the token is stored in an HttpOnly cookie and the URL is cleaned up.
+        # Scripts can send `Authorization: Bearer <token>` instead.
+        def valid(candidate: str | None) -> bool:
+            return bool(candidate) and hmac.compare_digest(candidate.encode(), token.encode())
+
+        @app.middleware("http")
+        async def require_token(request: Request, call_next):
+            bearer = request.headers.get("authorization", "")
+            if valid(request.cookies.get(TOKEN_COOKIE)) or valid(bearer.removeprefix("Bearer ").strip()):
+                return await call_next(request)
+            if request.method == "GET" and valid(request.query_params.get("token")):
+                url = request.url.remove_query_params("token")
+                resp = RedirectResponse(url.path + (f"?{url.query}" if url.query else ""), status_code=303)
+                resp.set_cookie(TOKEN_COOKIE, token, httponly=True, samesite="strict",
+                                secure=request.url.scheme == "https")
+                return resp
+            return PlainTextResponse("ActLens: missing or invalid access token. Open the full link printed "
+                                     "by the server (it ends in ?token=...).", status_code=401)
 
     def guarded(fn, *a, **kw):
         try:

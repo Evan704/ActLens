@@ -405,3 +405,29 @@ def test_cache_budget_env(monkeypatch):
     assert ModelManager(factory=FakeProvider).cache.budget == 3 * 2**20
     monkeypatch.delenv("ACTLENS_CACHE_MB")
     assert ModelManager(factory=FakeProvider).cache.budget == 2048 * 2**20
+
+
+# ----- access token (used when the server is exposed through a tunnel) -----
+def test_token_blocks_requests_without_it():
+    c = TestClient(create_app(ModelManager(FakeProvider), autoload=False, token="s3cret"), follow_redirects=False)
+    assert c.get("/api/status").status_code == 401
+    assert c.get("/api/status", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert c.get("/api/status?token=nope").status_code == 401
+
+
+def test_token_bearer_header_works():
+    c = TestClient(create_app(ModelManager(FakeProvider), autoload=False, token="s3cret"))
+    assert c.get("/api/status", headers={"Authorization": "Bearer s3cret"}).status_code == 200
+
+
+def test_token_query_sets_cookie_and_redirects():
+    c = TestClient(create_app(ModelManager(FakeProvider), autoload=False, token="s3cret"), follow_redirects=False)
+    r = c.get("/api/status?token=s3cret")
+    assert r.status_code == 303 and r.headers["location"] == "/api/status"
+    assert "actlens_token=s3cret" in r.headers["set-cookie"] and "HttpOnly" in r.headers["set-cookie"]
+    assert c.get("/api/status").status_code == 200  # the cookie is now sent
+
+
+def test_no_token_means_open_access():
+    c = TestClient(create_app(ModelManager(FakeProvider), autoload=False))
+    assert c.get("/api/status").status_code == 200

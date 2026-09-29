@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import sys
 import threading
 import webbrowser
@@ -23,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
     p.add_argument("-p", "--port", type=int, default=int(os.environ.get("PORT", 8000)),
                    help="port (default: 8000, or $PORT)")
+    p.add_argument("--token", nargs="?", const="auto", default=os.environ.get("ACTLENS_TOKEN"), metavar="TOKEN",
+                   help="require an access token (omit the value to generate one; also $ACTLENS_TOKEN). "
+                   "The printed URL carries it as ?token=...")
     p.add_argument("--cache-mb", type=float, default=None,
                    help="activation cache budget in MB (default: $ACTLENS_CACHE_MB or 2048)")
     p.add_argument("--arch-module", action="append", default=[], metavar="MODULE",
@@ -55,10 +59,14 @@ def main(argv: list[str] | None = None) -> None:
         print(f"actlens: WARNING: binding to {args.host}. The API can load any model and has no authentication; "
               "only expose it on a network you trust.", file=sys.stderr)
 
+    token = secrets.token_urlsafe(24) if args.token == "auto" else args.token
     app = app_module.create_app(model_id=args.model or app_module.DEFAULT_MODEL,
-                                device=args.device, dtype=args.dtype)
+                                device=args.device, dtype=args.dtype, token=token)
+    url = f"http://{'127.0.0.1' if args.host in ('0.0.0.0', '::') else args.host}:{args.port}"
+    if token:
+        url += f"/?token={token}"
+        print(f"actlens: access token required. Open {url}", file=sys.stderr, flush=True)
     if args.open:
-        url = f"http://{'127.0.0.1' if args.host in ('0.0.0.0', '::') else args.host}:{args.port}"
         threading.Timer(1.5, webbrowser.open, args=(url,)).start()
     uvicorn.run(app, host=args.host, port=args.port)
 
