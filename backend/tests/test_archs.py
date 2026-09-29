@@ -126,3 +126,11 @@ def test_plugin_module_can_register_an_adapter(tmp_path, monkeypatch):
         assert registry.resolve_adapter(root).name == "mine"
     finally:
         registry.ADAPTERS[:] = before
+
+
+def test_gated_mlp_labels_follow_the_models_activation():
+    def label(name):
+        p = NNsightProvider(f"tiny/{name}", device="cpu", model=tiny.TINY[name]())
+        return {s.id: s.label for s in p.activations()}["silu"]
+    assert label("llama") == "silu — act_fn(gate)"
+    assert "gelu" in label("gemma")

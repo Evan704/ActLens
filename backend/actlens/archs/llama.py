@@ -1,4 +1,4 @@
-"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
+"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
 from __future__ import annotations
 
 import torch
@@ -13,7 +13,7 @@ ROPE_ACTS = ("q_rope", "k_rope")
 @register
 class LlamaAdapter(PreNormBlockAdapter):
     name = "llama"
-    model_types = ("llama", "qwen2", "qwen3", "mistral")
+    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma")
     layers_path = "model.layers"
     norm1, attn, o_proj = "input_layernorm", "self_attn", "self_attn.o_proj"
     norm2, down_proj = "post_attention_layernorm", "mlp.down_proj"
@@ -65,11 +65,18 @@ class LlamaAdapter(PreNormBlockAdapter):
                 return c.tok(b.mlp.act_fn.output)
             return c.tok(torch.nn.functional.silu(b.mlp.gate_proj.output))
 
+        cfg = root.config  # the ids stay silu/swiglu; only the names follow the model's real gate activation
+        act = getattr(cfg, "hidden_activation", None) or getattr(cfg, "hidden_act", None) or "silu"
+        named = {} if act == "silu" else {
+            "silu": dict(label=f"silu — act_fn(gate) [{act}]", description=f"The {act} activation applied to gate."),
+            "swiglu": dict(label=f"swiglu — {act}(gate)·up",
+                           description=f"Product {act}(gate)*up, the input of down_proj (MLP neurons)."),
+        }
         out |= {
             "gate": ActDef(lambda b, c: c.tok(b.mlp.gate_proj.output), I),
             "up": ActDef(lambda b, c: c.tok(b.mlp.up_proj.output), I),
-            "silu": ActDef(silu, I),
-            "swiglu": ActDef(lambda b, c: c.tok(b.mlp.down_proj.input), I),
+            "silu": ActDef(silu, I, **named.get("silu", {})),
+            "swiglu": ActDef(lambda b, c: c.tok(b.mlp.down_proj.input), I, **named.get("swiglu", {})),
         }
         return out
 
