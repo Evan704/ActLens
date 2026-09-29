@@ -10,6 +10,8 @@ MLP internals and more. It runs locally, in one command.
 [![Python](https://img.shields.io/pypi/pyversions/actlens)](https://pypi.org/project/actlens/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Evan704/ActLens/blob/main/LICENSE)
 
+![ActLens showing the residual stream of Qwen3-0.6B](https://raw.githubusercontent.com/Evan704/ActLens/main/docs/images/layer-view.png)
+
 ## Features
 
 - **Every activation, every layer.** Residual stream, attention (Q, K, V, RoPE, patterns, context, output) and MLP
@@ -23,6 +25,9 @@ MLP internals and more. It runs locally, in one command.
 - **Fast to navigate.** Pan, zoom, brush and inspect; large activations are pooled server-side so zooming out stays cheap.
 - **Publication-ready export.** PNG and PDF with title, prompt, axes and colorbar at up to 4×.
 - **Extensible.** Add support for a new architecture with a small adapter.
+
+See [Examples](https://github.com/Evan704/ActLens/blob/main/docs/examples.md) for a massive activation on the first
+token, attention sinks and previous-token heads, each a few clicks away.
 
 ## Quick start
 
