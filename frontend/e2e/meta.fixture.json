@@ -1,0 +1,122 @@
+{
+ "stats": [
+  {
+   "id": "norm",
+   "label": "norm",
+   "long_label": "L2 norm",
+   "title": "L2 norm",
+   "signed": false,
+   "diverging": false
+  },
+  {
+   "id": "absmax",
+   "label": "|max|",
+   "long_label": "|max|",
+   "title": "largest absolute value",
+   "signed": false,
+   "diverging": false
+  },
+  {
+   "id": "mean",
+   "label": "mean",
+   "long_label": "mean",
+   "title": "mean (signed)",
+   "signed": true,
+   "diverging": true
+  },
+  {
+   "id": "std",
+   "label": "std",
+   "long_label": "std",
+   "title": "standard deviation",
+   "signed": false,
+   "diverging": false
+  },
+  {
+   "id": "kurtosis",
+   "label": "kurtosis",
+   "long_label": "excess kurtosis",
+   "title": "excess kurtosis (heavy-tailedness)",
+   "signed": true,
+   "diverging": false
+  }
+ ],
+ "overview_extra": [
+  {
+   "id": "dim",
+   "label": "single channel",
+   "long_label": "single channel",
+   "title": "one channel",
+   "signed": true,
+   "diverging": true
+  }
+ ],
+ "aggs": [
+  {
+   "id": "absmax",
+   "label": "abs-max (keeps outliers)"
+  },
+  {
+   "id": "mean",
+   "label": "mean"
+  },
+  {
+   "id": "max",
+   "label": "max"
+  },
+  {
+   "id": "min",
+   "label": "min"
+  }
+ ],
+ "orders": [
+  {
+   "id": "natural",
+   "label": "natural index"
+  },
+  {
+   "id": "absmax",
+   "label": "|max| over tokens ↓"
+  },
+  {
+   "id": "std",
+   "label": "std over tokens ↓"
+  },
+  {
+   "id": "mean_abs",
+   "label": "|mean| over tokens ↓"
+  }
+ ],
+ "attn_stats": [
+  {
+   "id": "entropy",
+   "label": "mean entropy (nats) — low = focused",
+   "sort_label": "entropy (focused first)",
+   "detail_label": "entropy",
+   "tag": "ent",
+   "badge": "e",
+   "ascending": true,
+   "digits": 3
+  },
+  {
+   "id": "first_token",
+   "label": "mass on first token (attention sink)",
+   "sort_label": "sink mass ↓",
+   "detail_label": "sink mass",
+   "tag": "sink",
+   "badge": "s",
+   "ascending": false,
+   "digits": 3
+  },
+  {
+   "id": "distance",
+   "label": "mean attention distance (tokens)",
+   "sort_label": "distance ↓",
+   "detail_label": "distance",
+   "tag": "dist",
+   "badge": null,
+   "ascending": false,
+   "digits": 2
+  }
+ ]
+}

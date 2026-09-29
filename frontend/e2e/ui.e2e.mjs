@@ -63,7 +63,8 @@ async function download(page, buttonText) {
 await session("light", async (page, mock) => {
   const S = "light";
   // ---- defaults ----
-  ok("selection bar has activation picker, slider, mode toggle", (await page.locator(".selbar select").count()) === 1 && (await page.locator(".selbar input[type=range]").count()) === 1 && (await page.locator(".selbar .seg button").count()) === 2);
+  const modes = await page.locator(".selbar .seg button").allInnerTexts();
+  ok("selection bar has activation picker, slider, mode toggle", (await page.locator(".selbar select").count()) === 1 && (await page.locator(".selbar input[type=range]").count()) === 1 && modes.join(",") === "Layer,Across layers,Logit lens,Architecture", modes.join(","));
   ok("no tab bar", (await page.locator(".tabs").count()) === 0);
   ok("default act is resid_post", (await page.inputValue('.selbar select[aria-label="Activation"]')) === "resid_post");
   ok("default layer is mid-network", (await layerName(page)) === "14", await layerName(page));
@@ -261,6 +262,44 @@ await session("light", async (page, mock) => {
   await settle(page, 900);
   await shot(page, S, "14-swiglu");
   ok("mode is Layer after leaving attention", (await page.locator(".selbar .seg button.on").innerText()) === "Layer");
+});
+
+await session("light", async (page, mock) => {
+  const S = "light";
+  const lensReqs = () => mock.requests.filter((r) => r.path.endsWith("/logit_lens"));
+  await page.click('.selbar .seg button:has-text("Logit lens")');
+  await page.waitForSelector(".lens-table tbody tr");
+  ok("lens: one row per layer", (await page.locator(".lens-table tbody tr").count()) === 28);
+  const req0 = lensReqs().at(-1)?.q ?? {};
+  const nTok = await page.locator(".lens-toks button").count();
+  ok("lens: first request is resid_post, the last token, k=8, no target", req0.act === "resid_post" && req0.pos === String(nTok - 1) && req0.k === "8" && req0.target === undefined, JSON.stringify(req0));
+  ok("lens: last token has no next prompt token to track", (await page.locator(".side").innerText()).includes("no next prompt token"));
+  ok("lens: no tracked column without a target", (await page.locator(".lens-table th.tgt").count()) === 0);
+
+  await page.locator(".lens-toks button").nth(3).click();
+  await page.waitForSelector(".lens-table th.tgt");
+  const req1 = lensReqs().at(-1).q;
+  ok("lens: clicking token #3 requests pos 3 and tracks token id 1004", req1.pos === "3" && req1.target === "1004", JSON.stringify(req1));
+  ok("lens: tracked column, first-top-1 layer and both trajectories are shown", (await page.locator(".lens-tgt").count()) === 28 && (await page.locator(".side svg.traj").count()) === 2 && (await page.locator(".side").innerText()).includes("first top-1"));
+  ok("lens: the tracked token is outlined at the last layer", (await page.locator(".lens-table tbody tr").last().locator(".lens-cell.target").count()) === 1);
+  ok("lens: cells carry a probability", /\d+(\.\d)?%/.test(await page.locator(".lens-cell").first().innerText()));
+  await shot(page, S, "15-lens");
+
+  await page.selectOption('.toolbar label:has-text("top-k") select', "12");
+  await settle(page, 400);
+  ok("lens: top-k 12 gives 12 rank columns and 12 cells per row", (await page.locator(".lens-table thead th").count()) === 14 && (await page.locator(".lens-table tbody tr").first().locator(".lens-cell").count()) === 12);
+  await page.selectOption('.toolbar label:has-text("Stream") select', "resid_mid");
+  await settle(page, 400);
+  ok("lens: stream selection is sent", lensReqs().at(-1).q.act === "resid_mid");
+  await page.selectOption('.toolbar label:has-text("Track") select', "none");
+  await settle(page, 400);
+  ok("lens: tracking off removes the tracked column", (await page.locator(".lens-table th.tgt").count()) === 0 && lensReqs().at(-1).q.target === undefined);
+
+  await page.locator(".lens-table td.layer").nth(5).click();
+  ok("lens: clicking a layer row selects that layer", (await layerName(page)) === "5", await layerName(page));
+  await page.click('.selbar .seg button:has-text("Layer")');
+  await page.waitForSelector(".figure canvas");
+  ok("lens: back to the Layer view", (await page.locator(".lens-table").count()) === 0 && (await page.locator(".selbar .seg button.on").innerText()) === "Layer");
 });
 
 await session("dark", async (page) => {

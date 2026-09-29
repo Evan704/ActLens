@@ -8,6 +8,12 @@
  * channels, so head separators, ranking and the across-layers map have visible structure.
  */
 
+import fs from "node:fs";
+
+// GET /api/meta: a snapshot of backend/actlens/reducers.py capabilities. Regenerate it after registering a statistic:
+//   (cd backend && python -c "import json; from actlens.reducers import capabilities; print(json.dumps(capabilities(), indent=1, ensure_ascii=False))") > frontend/e2e/meta.fixture.json
+const META = JSON.parse(fs.readFileSync(new URL("./meta.fixture.json", import.meta.url), "utf8"));
+
 export const MODEL = { n_layers: 28, hidden_size: 1024, intermediate_size: 3072, n_heads: 16, n_kv_heads: 8, head_dim: 128 };
 const L = MODEL.n_layers;
 const NH = MODEL.n_heads;
@@ -199,6 +205,7 @@ export async function installMock(page, opts = {}) {
           presets: [{ id: "Qwen/Qwen3-0.6B", label: "Qwen3-0.6B" }, { id: "Qwen/Qwen2.5-0.5B", label: "Qwen2.5-0.5B" }],
         });
       }
+      if (p === "/api/meta") return json(route, META);
       if (p === "/api/corpus") return json(route, [{ id: "mock-1", title: "Paris and code", category: "Mock", text: PROMPT }]);
       if (p === "/api/run" && req.method() === "POST") {
         const body = JSON.parse(req.postData() ?? "{}");
@@ -214,6 +221,7 @@ export async function installMock(page, opts = {}) {
       const T = state.run?.tokens.length ?? 64;
       const what = m[1];
       if (what.startsWith("attn")) return attnRoute(what);
+      if (what === "logit_lens") return lensRoute();
       const id = q.act;
       const info = byId[id];
       if (!info || info.kind !== "token") return json(route, { detail: `unknown act ${id}` }, 400);
@@ -262,6 +270,26 @@ export async function installMock(page, opts = {}) {
         return json(route, { ...summarize(vals, 64, q.clip === "true"), top: [], region: { t0, t1, d0, d1 } });
       }
       return json(route, { detail: "not found" }, 404);
+
+      // Deterministic stand-in for the logit lens: the tracked token climbs to rank 1 at the last layer.
+      function lensRoute() {
+        const act = q.act ?? "resid_post";
+        if (!["resid_pre", "resid_mid", "resid_post"].includes(act)) return json(route, { detail: "logit lens reads the residual stream" }, 400);
+        const pos = ((num("pos", -1) % T) + T) % T, k = num("k", 10);
+        const target = q.target === undefined ? null : Number(q.target);
+        const ids = [], tokens = [], logprobs = [], entropy = [];
+        for (let l = 0; l < L; l++) {
+          const row = Array.from({ length: k }, (_, r) => (pos * 31 + l * 7 + r * 13) % 5000);
+          if (target !== null && l === L - 1) row[0] = target;
+          ids.push(row);
+          tokens.push(row.map((id) => ` tok${id}`));
+          logprobs.push(row.map((_, r) => -(0.3 + r * 0.6 + (L - 1 - l) * 0.05)));
+          entropy.push(6 - l * 0.1);
+        }
+        const out = { act, pos, layer_labels: layerLabels, ids, tokens, logprobs, entropy };
+        if (target !== null) out.target = { id: target, logprob: layerLabels.map((_, l) => -8 + l * 0.3), rank: layerLabels.map((_, l) => Math.max(1, Math.round(200 * 0.8 ** l))) };
+        return json(route, out);
+      }
 
       function attnRoute(kind) {
         if (kind === "attn_overview") {
