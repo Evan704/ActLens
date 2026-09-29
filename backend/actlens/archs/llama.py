@@ -1,4 +1,4 @@
-"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, OLMo, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
+"""Llama-style decoders: Llama, Qwen2/2.5/3, Mistral, Gemma, OLMo, StableLM, SmolLM, ... (gated MLP, RoPE, optional QK-norm, GQA)."""
 from __future__ import annotations
 
 import torch
@@ -13,7 +13,7 @@ ROPE_ACTS = ("q_rope", "k_rope")
 @register
 class LlamaAdapter(PreNormBlockAdapter):
     name = "llama"
-    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma", "olmo")
+    model_types = ("llama", "qwen2", "qwen3", "mistral", "gemma", "olmo", "stablelm")
     layers_path = "model.layers"
     norm1, attn, o_proj = "input_layernorm", "self_attn", "self_attn.o_proj"
     norm2, down_proj = "post_attention_layernorm", "mlp.down_proj"
@@ -35,7 +35,8 @@ class LlamaAdapter(PreNormBlockAdapter):
     def acts(self, root, d: Dims) -> dict[str, ActDef]:
         block0 = get(root, self.layers_path)[0]
         has_qk_norm = has(block0, "self_attn.q_norm") and has(block0, "self_attn.k_norm")
-        has_rope = has(root, "model.rotary_emb")
+        # StableLM's per-head qk LayerNorm (`q_layernorm`) sits between the projection and RoPE and is not modelled
+        has_rope = has(root, "model.rotary_emb") and not has(block0, "self_attn.q_layernorm")
         act_fn_is_module = isinstance(block0.mlp.act_fn, torch.nn.Module)
         nH, nKV, Dh, I = d.n_heads, d.n_kv_heads, d.head_dim, d.inter
         # OLMo clamps q/k/v in place after the projections. No adapter model has both this and QK-norm (OLMoE would

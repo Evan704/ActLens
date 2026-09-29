@@ -92,11 +92,12 @@ def get(obj, path: str):
 
 
 def has(obj, path: str) -> bool:
+    """Whether `path` resolves to a module. An attribute set to None counts as absent (e.g. StableLM's
+    `post_attention_layernorm` with parallel residuals)."""
     try:
-        get(obj, path)
+        return get(obj, path) is not None
     except (AttributeError, IndexError, TypeError, KeyError):
         return False
-    return True
 
 
 def missing_paths(root, paths: list[str], block_paths: list[str], layers_path: str) -> list[str]:
