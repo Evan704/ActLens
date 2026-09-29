@@ -40,8 +40,13 @@ def per_head(a, heads, dh):  # [L, T, heads*dh] -> [L, heads, T, dh]
 def test_registry_ids_and_shapes(prov, acts):
     T, L = len(IDS), prov.dims.n_layers
     specs = prov.activations()
-    assert {"resid_pre", "resid_post", "attn_norm", "q", "k", "v", "attn_pattern", "attn_ctx", "o",
-            "mlp_norm", "down"} <= {s.id for s in specs}
+    d, ids = prov.dims, {s.id for s in specs}
+    required = {"resid_pre", "resid_post", "q", "k", "v", "attn_pattern", "attn_ctx", "o", "down"}
+    required |= set() if d.parallel_residual else {"resid_mid"}
+    required |= {"attn_norm", "mlp_norm"} if d.pre_norm else set()
+    required |= {"o_norm", "down_norm"} if d.branch_norm else set()
+    assert required <= ids
+    assert d.pre_norm == ("attn_norm" in ids) and d.parallel_residual == ("resid_mid" not in ids)
     for s in specs:
         a = acts[s.id]
         if s.kind == "attn":
@@ -66,12 +71,13 @@ def test_capture_is_deterministic_and_independent_of_other_acts(prov, acts):
 
 def test_residual_stream_identities(prov, acts):
     r = prov.dims.residual_scale
+    o, down = (acts["o_norm"], acts["down_norm"]) if prov.dims.branch_norm else (acts["o"], acts["down"])
     if prov.dims.parallel_residual:  # both branches read the block input; there is no resid_mid
         assert "resid_mid" not in acts
-        close(acts["resid_post"], acts["resid_pre"] + r * (acts["o"] + acts["down"]))
+        close(acts["resid_post"], acts["resid_pre"] + r * (o + down))
     else:
-        close(acts["resid_mid"], acts["resid_pre"] + r * acts["o"])
-        close(acts["resid_post"], acts["resid_mid"] + r * acts["down"])
+        close(acts["resid_mid"], acts["resid_pre"] + r * o)
+        close(acts["resid_post"], acts["resid_mid"] + r * down)
     close(acts["resid_post"][:-1], acts["resid_pre"][1:], rtol=1e-5, atol=1e-6)
 
 
@@ -149,3 +155,27 @@ def test_stablelm_variants_the_llama_adapter_cannot_model():
     p = NNsightProvider("tiny/x", device="cpu", model=tiny.auto("stablelm", qk_layernorm=True)())
     ids = {s.id for s in p.activations()}
     assert {"q", "k"} <= ids and not ({"q_rope", "k_rope"} & ids)  # per-head qk norm sits before RoPE
+
+
+def test_post_norm_outputs_are_the_models_norm_of_the_branch_output(prov, acts):
+    """`o_norm`/`down_norm` are what enters the residual stream: the block's norm applied to `o`/`down`."""
+    if not prov.dims.branch_norm:
+        pytest.skip("pre-norm architecture")
+    layers = prov.model._model.model.layers
+    for norm, raw, out in (("post_attention_layernorm", "o", "o_norm"), ("post_feedforward_layernorm", "down", "down_norm")):
+        expect = np.stack([getattr(layers[i], norm)(torch.from_numpy(acts[raw][i])).detach().numpy()
+                           for i in range(prov.dims.n_layers)])
+        close(acts[out], expect, rtol=1e-4, atol=1e-5)
+
+
+def test_olmo3_style_mixed_layer_types_are_rejected_not_silently_misread():
+    """Sliding-window layers with their own RoPE tables would get the full-attention cos/sin: refuse, don't guess."""
+    model = tiny.auto("olmo3", layer_types=["sliding_attention"] * (tiny.LAYERS - 1) + ["full_attention"])()
+    with pytest.raises(ValueError, match="layer_types"):
+        NNsightProvider("tiny/olmo3", device="cpu", model=model)
+
+
+def test_olmo2_norm_labels_say_the_norm_spans_all_heads():
+    p = NNsightProvider("tiny/olmo2", device="cpu", model=tiny.TINY["olmo2"]())
+    labels = {s.id: s.label for s in p.activations()}
+    assert "all heads" in labels["q_norm"] and "all heads" in labels["k_norm"]

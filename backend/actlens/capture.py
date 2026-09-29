@@ -28,6 +28,8 @@ REGISTRY: dict[str, tuple[str, str, str]] = {
                      "Attention probabilities [heads, query, key] (causal)."),
     "attn_ctx": ("Attention", "attn_ctx — o_proj input", "Per-head attention-weighted values, heads concatenated."),
     "o": ("Attention", "o — o_proj output", "Attention output before the residual add."),
+    "o_norm": ("Attention", "o_norm — post-attention norm",
+               "Attention output after the post-norm; this is what is added to the residual stream."),
     "mlp_norm": ("MLP", "mlp_norm — post_attention_layernorm", "Output of the pre-MLP normalization."),
     "gate": ("MLP", "gate — gate_proj", "gate_proj output."),
     "up": ("MLP", "up — up_proj", "up_proj output."),
@@ -36,6 +38,8 @@ REGISTRY: dict[str, tuple[str, str, str]] = {
     "mlp_act": ("MLP", "mlp_act — act(up)",
                 "Non-gated MLP: the activation function applied to up, the input of down."),
     "down": ("MLP", "down — down_proj output", "MLP output before the residual add."),
+    "down_norm": ("MLP", "down_norm — post-feedforward norm",
+                  "MLP output after the post-norm; this is what is added to the residual stream."),
 }
 ACT_IDS = tuple(REGISTRY)
 ATTN_ACT = "attn_pattern"

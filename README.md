@@ -141,6 +141,7 @@ export. PDFs embed the figure as a high-resolution image so CJK tokens render co
 | `llama` | `llama`, `qwen2`, `qwen3`, `mistral`, `gemma`, `olmo`, `stablelm`, `granite`, and models with the same module layout | Llama, Qwen2/2.5/3, Mistral, Gemma, OLMo, StableLM, Granite, SmolLM |
 | `gpt_neox` | `gpt_neox` | Pythia, Dolly, RedPajama-INCITE |
 | `phi3` | `phi3` | Phi-3, Phi-3.5, Phi-4-mini |
+| `olmo2` | `olmo2` | OLMo-2 |
 | `gpt2` | `gpt2` | GPT-2, DistilGPT-2 |
 
 Qwen3-0.6B and GPT-2 are tested on real checkpoints; every adapter is also tested on a tiny random model. An

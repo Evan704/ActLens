@@ -24,6 +24,8 @@ class Dims:
     attn_scale: float | None = None  # softmax scale applied to q.k; None means 1/sqrt(head_dim)
     residual_scale: float = 1.0  # attention/MLP outputs are multiplied by this before the residual add (Granite)
     parallel_residual: bool = False  # x + attn(ln1 x) + mlp(ln2 x): the MLP reads the block input, no `resid_mid`
+    pre_norm: bool = True  # a norm runs before attention and before the MLP (`attn_norm`, `mlp_norm`)
+    branch_norm: bool = False  # attention/MLP outputs are normalized before the residual add (`o_norm`, `down_norm`)
 
 
 @dataclass
@@ -130,22 +132,30 @@ class PreNormBlockAdapter(ArchAdapter):
     norm2: str  # pre-MLP norm
     down_proj: str  # MLP output projection, relative to the block
 
-    def shared_acts(self, d: Dims) -> dict[str, ActDef]:
-        n1, n2, o, dn = self.norm1, self.norm2, self.o_proj, self.down_proj
+    def core_acts(self, d: Dims) -> dict[str, ActDef]:
+        """The activations that do not depend on any norm: the block output, attention pattern/context/output and
+        the MLP output."""
+        o, dn = self.o_proj, self.down_proj
         D, H, Dh = d.hidden, d.n_heads, d.head_dim
         o_name, dn_name = o.rsplit(".", 1)[-1], dn.rsplit(".", 1)[-1]  # labels name the module, not its path
-
         return {
-            "resid_pre": ActDef(lambda b, c: c.tok(get(b, n1).input), D),
-            "resid_mid": ActDef(lambda b, c: c.tok(get(b, n2).input), D),
             "resid_post": ActDef(lambda b, c: c.tok(layer_output(b)), D),
-            "attn_norm": ActDef(lambda b, c: c.tok(get(b, n1).output), D, label=f"attn_norm — {n1}"),
             "attn_pattern": ActDef(lambda b, c: c.host(get(b, self.attn).output[1], torch.float16)[0],
                                    None, H, None),
             "attn_ctx": ActDef(lambda b, c: c.tok(get(b, o).input), H * Dh, H, Dh, label=f"attn_ctx — {o_name} input"),
             "o": ActDef(lambda b, c: c.tok(get(b, o).output), D, label=f"o — {o_name} output"),
-            "mlp_norm": ActDef(lambda b, c: c.tok(get(b, n2).output), D, label=f"mlp_norm — {n2}"),
             "down": ActDef(lambda b, c: c.tok(get(b, dn).output), D, label=f"down — {dn_name} output"),
+        }
+
+    def shared_acts(self, d: Dims) -> dict[str, ActDef]:
+        n1, n2 = self.norm1, self.norm2
+        D = d.hidden
+        return {
+            **self.core_acts(d),
+            "resid_pre": ActDef(lambda b, c: c.tok(get(b, n1).input), D),
+            "resid_mid": ActDef(lambda b, c: c.tok(get(b, n2).input), D),
+            "attn_norm": ActDef(lambda b, c: c.tok(get(b, n1).output), D, label=f"attn_norm — {n1}"),
+            "mlp_norm": ActDef(lambda b, c: c.tok(get(b, n2).output), D, label=f"mlp_norm — {n2}"),
         }
 
     def probe_paths(self) -> tuple[list[str], list[str]]:

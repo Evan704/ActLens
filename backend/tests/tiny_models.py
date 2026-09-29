@@ -47,5 +47,6 @@ TINY = {
     "gpt_neox_seq": auto("gpt_neox", use_parallel_residual=False, rope_parameters={
         "rope_type": "default", "rope_theta": 10000.0, "partial_rotary_factor": 1.0}),
     "phi3": auto("phi3"),  # fused qkv_proj / gate_up_proj, GQA
+    "olmo2": auto("olmo2"),  # post-norm blocks, q/k RMSNorm over the whole projection
     "olmo": auto("olmo", clip_qkv=0.05),  # non-parametric LayerNorm; a tiny clip_qkv makes the clamp bite
 }

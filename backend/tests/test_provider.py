@@ -22,7 +22,7 @@ def test_activations_only_list_what_the_model_has(make, qk_norm):
     assert ("q_norm" in ids) == qk_norm and ("k_norm" in ids) == qk_norm
     assert "q_rope" in ids and "k_rope" in ids
     assert ids == [a for a in ACT_IDS if a in ids]  # registry (display) order
-    assert set(ids) >= set(ACT_IDS) - {"q_norm", "k_norm", "mlp_act"}
+    assert set(ids) >= set(ACT_IDS) - {"q_norm", "k_norm", "mlp_act", "o_norm", "down_norm"}  # post-norm models only
 
 
 def test_model_without_rotary_emb_has_no_rope_acts():
