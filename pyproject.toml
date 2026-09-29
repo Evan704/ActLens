@@ -10,9 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "Evan704" }]
 keywords = ["interpretability", "transformers", "activations", "visualization", "huggingface"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Visualization",
@@ -26,6 +29,11 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "numpy>=1.26",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Evan704/ActLens"
+Repository = "https://github.com/Evan704/ActLens"
+Issues = "https://github.com/Evan704/ActLens/issues"
 
 [project.optional-dependencies]
 dev = ["pytest", "httpx", "build"]
