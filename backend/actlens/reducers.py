@@ -4,6 +4,8 @@
   distributions). Register with `@stat("name", label=...)`.
 - `AGGS`: how a block of cells is pooled into one when a window is larger than the screen budget.
 - `ORDER_SCORES`: how channels are ranked for the non-natural display orders.
+- `HEAD_METRICS`: a scalar per attention head of one layer (entropy, sink mass, ...), for the layer x head map, the
+  head sort and the badges. Register with `@head_metric("name", label=...)`.
 
 Every entry also carries the text the UI shows for it; `capabilities()` is what `GET /api/meta` serves, so the frontend
 lists whatever is registered here instead of keeping its own copy.
@@ -17,7 +19,7 @@ import numpy as np
 Reducer = Callable[[np.ndarray, int], np.ndarray]  # (x, axis) -> x reduced along `axis`
 
 STATS: dict[str, Reducer] = {}
-_INFO: dict[str, dict[str, dict]] = {"stats": {}, "aggs": {}, "orders": {}}  # kind -> id -> UI text
+_INFO: dict[str, dict[str, dict]] = {"stats": {}, "aggs": {}, "orders": {}, "attn_stats": {}}  # kind -> id -> UI text
 
 
 def stat(name: str, label: str, title: str = "", *, long_label: str | None = None,
@@ -107,6 +109,43 @@ order("absmax", "|max| over tokens ↓")(lambda x: np.abs(x).max(axis=0))
 order("std", "std over tokens ↓")(lambda x: x.std(axis=0))
 order("mean_abs", "|mean| over tokens ↓")(lambda x: np.abs(x.mean(axis=0)))
 
+# ----- attention heads: (p [H, T, T] float32 probabilities of one layer, dist [T, T]) -> [H] -----
+HeadMetric = Callable[[np.ndarray, np.ndarray], np.ndarray]
+HEAD_METRICS: dict[str, HeadMetric] = {}
+
+
+def head_metric(name: str, label: str, *, sort_label: str, detail_label: str, tag: str, badge: str | None = None,
+                ascending: bool = False, digits: int = 3) -> Callable[[HeadMetric], HeadMetric]:
+    """Register a per-head metric. `label` names it in the layer x head map menu, `sort_label` in the head sort menu,
+    `detail_label` in the selected-head card; `tag` prefixes its value in exported grids and `badge` (if any) on the
+    thumbnails. `ascending` sorts the smallest first."""
+    def add(fn: HeadMetric) -> HeadMetric:
+        HEAD_METRICS[name] = fn
+        _INFO["attn_stats"][name] = {"label": label, "sort_label": sort_label, "detail_label": detail_label,
+                                     "tag": tag, "badge": badge, "ascending": ascending, "digits": digits}
+        return fn
+    return add
+
+
+@head_metric("entropy", "mean entropy (nats) — low = focused", sort_label="entropy (focused first)",
+             detail_label="entropy", tag="ent", badge="e", ascending=True)
+def _entropy(p: np.ndarray, dist: np.ndarray) -> np.ndarray:
+    return (-(np.where(p > 0, p * np.log(np.maximum(p, 1e-30)), 0.0)).sum(-1)).mean(-1)
+
+
+@head_metric("first_token", "mass on first token (attention sink)", sort_label="sink mass ↓",
+             detail_label="sink mass", tag="sink", badge="s")
+def _first_token(p: np.ndarray, dist: np.ndarray) -> np.ndarray:
+    """Mean mass on key 0, over the queries that can look elsewhere (>= 1)."""
+    return p[:, 1:, 0].mean(-1) if p.shape[1] > 1 else np.ones(p.shape[0], dtype=np.float32)
+
+
+@head_metric("distance", "mean attention distance (tokens)", sort_label="distance ↓", detail_label="distance",
+             tag="dist", digits=2)
+def _distance(p: np.ndarray, dist: np.ndarray) -> np.ndarray:
+    return (p * np.maximum(dist, 0)).sum(-1).mean(-1)
+
+
 # statistics of the across-layers map that are not reductions (the value of one chosen channel)
 OVERVIEW_EXTRA = {"dim": {"label": "single channel", "long_label": "single channel", "title": "one channel",
                           "signed": True, "diverging": True}}
@@ -116,4 +155,4 @@ def capabilities() -> dict:
     """What the slicing endpoints accept, with UI text, in display order (the body of `GET /api/meta`)."""
     listed = lambda kind: [{"id": k, **v} for k, v in _INFO[kind].items()]
     return {"stats": listed("stats"), "overview_extra": [{"id": k, **v} for k, v in OVERVIEW_EXTRA.items()],
-            "aggs": listed("aggs"), "orders": listed("orders")}
+            "aggs": listed("aggs"), "orders": listed("orders"), "attn_stats": listed("attn_stats")}

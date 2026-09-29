@@ -1,5 +1,6 @@
 import type { AttnMeta } from "../api";
 import { LIGHT } from "../figure";
+import type { AttnStatInfo } from "../meta";
 import type { ExportOptions } from "../Heatmap";
 
 /** Render the head thumbnail grid (in display order) onto a fresh light-theme canvas for PNG/PDF export. */
@@ -8,6 +9,7 @@ export function renderHeadGrid(
   order: number[],
   thumbs: { head: number; canvas: HTMLCanvasElement }[],
   metrics: AttnMeta["metrics"] | undefined,
+  statInfos: AttnStatInfo[],
 ): { canvas: HTMLCanvasElement; width: number; height: number } {
   const cols = 4;
   const cell = 180;
@@ -36,7 +38,7 @@ export function renderHeadGrid(
     const y = header + Math.floor(i / cols) * (cell + 20 + gap);
     ctx.fillStyle = LIGHT.fg;
     ctx.font = "11px ui-monospace, Menlo, monospace";
-    ctx.fillText(`H${h}` + (metrics ? `  ent ${metrics.entropy[h].toFixed(2)}  sink ${metrics.first_token[h].toFixed(2)}` : ""), x, y + 12);
+    ctx.fillText(`H${h}` + (metrics ? statInfos.filter((s) => s.badge && metrics[s.id]).map((s) => `  ${s.tag} ${metrics[s.id][h].toFixed(2)}`).join("") : ""), x, y + 12);
     const c = byHead.get(h);
     if (c) ctx.drawImage(c, 0, 0, c.width, c.height, x, y + 18, cell, cell);
     ctx.strokeStyle = LIGHT.grid;

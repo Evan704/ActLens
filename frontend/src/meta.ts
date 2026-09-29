@@ -24,6 +24,23 @@ export interface OptionInfo {
   id: string;
   label: string;
 }
+/** A per-head attention metric (entropy, sink mass, ...). */
+export interface AttnStatInfo {
+  id: string;
+  /** Layer x head map menu. */
+  label: string;
+  /** Head sort menu. */
+  sort_label: string;
+  /** Selected-head card. */
+  detail_label: string;
+  /** Prefix of its value in exported grids. */
+  tag: string;
+  /** Prefix of its value on the head thumbnails; null = not shown there. */
+  badge: string | null;
+  /** Sorting puts the smallest first. */
+  ascending: boolean;
+  digits: number;
+}
 export interface Meta {
   /** Reductions along an axis: offered by the across-layers map and the distribution panel. */
   stats: StatInfo[];
@@ -31,6 +48,7 @@ export interface Meta {
   overview_extra: StatInfo[];
   aggs: OptionInfo[];
   orders: OptionInfo[];
+  attn_stats: AttnStatInfo[];
 }
 
 const stat = (id: string, label: string, title: string, long_label = label, signed = false, diverging = false): StatInfo => ({ id, label, long_label, title, signed, diverging });
@@ -55,6 +73,11 @@ export const DEFAULT_META: Meta = {
     { id: "absmax", label: "|max| over tokens ↓" },
     { id: "std", label: "std over tokens ↓" },
     { id: "mean_abs", label: "|mean| over tokens ↓" },
+  ],
+  attn_stats: [
+    { id: "entropy", label: "mean entropy (nats) — low = focused", sort_label: "entropy (focused first)", detail_label: "entropy", tag: "ent", badge: "e", ascending: true, digits: 3 },
+    { id: "first_token", label: "mass on first token (attention sink)", sort_label: "sink mass ↓", detail_label: "sink mass", tag: "sink", badge: "s", ascending: false, digits: 3 },
+    { id: "distance", label: "mean attention distance (tokens)", sort_label: "distance ↓", detail_label: "distance", tag: "dist", badge: null, ascending: false, digits: 2 },
   ],
 };
 

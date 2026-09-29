@@ -241,4 +241,24 @@ def test_capabilities_match_what_slicing_accepts():
     assert [s["id"] for s in cap["stats"]] + [e["id"] for e in cap["overview_extra"]] == list(slicing.OVERVIEW_STATS)
     assert [a["id"] for a in cap["aggs"]] == list(slicing.AGGS)
     assert [o["id"] for o in cap["orders"]] == list(slicing.ORDERS)
+    assert [a["id"] for a in cap["attn_stats"]] == list(slicing.ATTN_STATS)
     assert all(e["label"] and e["title"] for e in cap["stats"])
+
+
+def test_registered_head_metric_reaches_overview_slice_and_meta():
+    from actlens import reducers
+
+    p = np.tril(np.ones((1, 2, 3, 3), dtype=np.float16))
+    p = p / p.sum(-1, keepdims=True)
+    cap = Capture("attn_pattern", p)
+    try:
+        reducers.head_metric("first_row", "first row", sort_label="f", detail_label="f", tag="f")(
+            lambda p, dist: p[:, 0, 0])
+        out, _ = slicing.attn_overview(cap, "first_row")
+        assert np.allclose(out, 1.0)
+        _, meta = slicing.attn_slice(cap, 0, -1, 0, 3, 0, 3, 8, 8, "max")
+        assert meta["metrics"]["first_row"] == [1.0, 1.0]
+        assert "first_row" in [s["id"] for s in reducers.capabilities()["attn_stats"]]
+    finally:
+        reducers.HEAD_METRICS.pop("first_row", None)
+        reducers._INFO["attn_stats"].pop("first_row", None)

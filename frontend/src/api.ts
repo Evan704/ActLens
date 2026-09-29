@@ -6,7 +6,7 @@ export type ActKind = "token" | "attn";
 export type AggKind = string;
 export type OrderKind = string;
 export type OverviewStat = string;
-export type AttnStat = "entropy" | "first_token" | "distance";
+export type AttnStat = string;
 
 /** One capturable activation, as listed by /api/run. */
 export interface ActivationInfo {

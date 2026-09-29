@@ -6,7 +6,7 @@ import math
 import numpy as np
 
 from .capture import Capture
-from .reducers import AGGS as _POOLERS, ORDER_SCORES, STATS
+from .reducers import AGGS as _POOLERS, HEAD_METRICS, ORDER_SCORES, STATS
 
 AGGS = tuple(_POOLERS)
 ORDERS = ("natural", *ORDER_SCORES)
@@ -127,30 +127,28 @@ def overview(cap: Capture, stat: str, dim: int = 0) -> tuple[np.ndarray, dict]:
 # ---------- attention ----------
 
 def _attn_metrics(cap: Capture) -> np.ndarray:
-    """[L, H, 3]: mean entropy (nats), mean mass on key 0 (queries >= 1), mean attention distance."""
+    """[L, H, M]: every registered head metric (`reducers.HEAD_METRICS`, in registration order) per layer and head."""
     hit = cap.cache.get("attn_metrics")
     if hit is not None:
         return hit
     L, H, T, _ = cap.arr.shape
-    out = np.zeros((L, H, 3), dtype=np.float32)
+    out = np.zeros((L, H, len(HEAD_METRICS)), dtype=np.float32)
     dist = (np.arange(T)[:, None] - np.arange(T)[None, :]).astype(np.float32)
     for l in range(L):
         p = cap.arr[l].astype(np.float32)
-        ent = -(np.where(p > 0, p * np.log(np.maximum(p, 1e-30)), 0.0)).sum(-1)  # [H, T]
-        out[l, :, 0] = ent.mean(-1)
-        out[l, :, 1] = p[:, 1:, 0].mean(-1) if T > 1 else 1.0
-        out[l, :, 2] = (p * np.maximum(dist, 0)).sum(-1).mean(-1)
+        for i, fn in enumerate(HEAD_METRICS.values()):
+            out[l, :, i] = fn(p, dist)
     cap.cache["attn_metrics"] = out
     return out
 
 
-ATTN_STATS = ("entropy", "first_token", "distance")
+ATTN_STATS = tuple(HEAD_METRICS)  # snapshot of the built-ins; validation reads the live registry
 
 
 def attn_overview(cap: Capture, stat: str) -> tuple[np.ndarray, dict]:
-    if stat not in ATTN_STATS:
+    if stat not in HEAD_METRICS:
         raise ValueError(f"unknown attention stat {stat!r}")
-    m = _attn_metrics(cap)[:, :, ATTN_STATS.index(stat)]
+    m = _attn_metrics(cap)[:, :, list(HEAD_METRICS).index(stat)]
     out = np.ascontiguousarray(m, dtype=np.float32)
     return out, {"stat": stat, "rows": out.shape[0], "cols": out.shape[1],
                  "range": {"min": float(out.min()), "max": float(out.max())}}
@@ -171,7 +169,7 @@ def attn_slice(cap: Capture, layer: int, head: int, q0: int, q1: int, k0: int, k
     meta = {
         "layer": layer, "heads": heads, "q0": q0, "q1": q1, "k0": k0, "k1": k1, "n_tokens": T,
         "bq": bq, "bk": bk, "rows": out.shape[1], "cols": out.shape[2], "agg": agg,
-        "metrics": {name: metrics[heads, i].tolist() for i, name in enumerate(ATTN_STATS)},
+        "metrics": {name: metrics[heads, i].tolist() for i, name in enumerate(HEAD_METRICS)},
     }
     return out, meta
 

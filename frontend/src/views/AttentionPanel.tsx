@@ -6,6 +6,7 @@ import { paintCells, type Cell, type Region } from "../figure";
 import { Heatmap, type HeatmapHandle, type Matrix } from "../Heatmap";
 import { DisplayControls, ExportButtons } from "../components/controls";
 import { StatsCard } from "../components/StatsCard";
+import { useMeta } from "../meta";
 import { useStore } from "../store";
 import { fmtToken } from "../tokens";
 import { fetchWindow, type Viewport } from "../viewport";
@@ -13,16 +14,13 @@ import { renderHeadGrid } from "./attnGridExport";
 
 type Scope = "window" | "selection" | "token" | "dim";
 
-const STAT_LABEL: Record<AttnStat, string> = {
-  entropy: "mean entropy (nats) — low = focused",
-  first_token: "mass on first token (attention sink)",
-  distance: "mean attention distance (tokens)",
-};
 const MAP_DISPLAY: Display = { cmap: "viridis", range: "full", scale: "linear", symmetric: false, manual: [0, 1] };
 const THUMB = 96;
 
 /** "Layer" mode for attn_pattern: head grid of the selected layer -> single head detail, plus the layer x head map. */
 export function AttentionPanel({ info }: { info: ActivationInfo }) {
+  const attnStats = useMeta().attn_stats;
+  const badged = attnStats.filter((s) => s.badge);
   const run = useStore((s) => s.run)!;
   const layer = useStore((s) => s.layer);
   const setLayer = useStore((s) => s.setLayer);
@@ -71,7 +69,8 @@ export function AttentionPanel({ info }: { info: ActivationInfo }) {
     const m = grid.data?.meta.metrics;
     if (a.sortBy !== "index" && m) {
       const key = m[a.sortBy];
-      idx.sort((x, y) => (a.sortBy === "entropy" ? key[x] - key[y] : key[y] - key[x]));
+      const up = attnStats.find((s) => s.id === a.sortBy)?.ascending;
+      if (key) idx.sort((x, y) => (up ? key[x] - key[y] : key[y] - key[x]));
     }
     return idx;
   }, [H, grid.data, a.sortBy]);
@@ -130,14 +129,14 @@ export function AttentionPanel({ info }: { info: ActivationInfo }) {
 
   // --- exporting the thumbnail grid ---
   const gridHandle = useRef<HeatmapHandle>({ exportCanvas: () => { throw new Error("not ready"); } });
-  gridHandle.current = { exportCanvas: (opts) => renderHeadGrid(opts, order, thumbs, grid.data?.meta.metrics) };
+  gridHandle.current = { exportCanvas: (opts) => renderHeadGrid(opts, order, thumbs, grid.data?.meta.metrics, attnStats) };
 
   const layerLabel = info.layer_labels[layer] ?? String(layer);
   const metaLines = () => [`prompt: “${run.tokens.join("").replace(/\s+/g, " ").slice(0, 110)}”`];
   const selectedMetrics = head !== null && grid.data ? (() => {
     const i = grid.data.meta.heads.indexOf(head);
     const m = grid.data.meta.metrics;
-    return i >= 0 ? { entropy: m.entropy[i], first_token: m.first_token[i], distance: m.distance[i] } : null;
+    return i >= 0 ? Object.fromEntries(attnStats.map((s) => [s.id, m[s.id]?.[i]])) as Record<AttnStat, number | undefined> : null;
   })() : null;
 
   return (
@@ -159,9 +158,7 @@ export function AttentionPanel({ info }: { info: ActivationInfo }) {
               Sort heads by
               <select value={a.sortBy} onChange={(e) => patchAttn({ sortBy: e.target.value as typeof a.sortBy })}>
                 <option value="index">head index</option>
-                <option value="entropy">entropy (focused first)</option>
-                <option value="first_token">sink mass ↓</option>
-                <option value="distance">distance ↓</option>
+                {attnStats.map((s) => <option key={s.id} value={s.id}>{s.sort_label}</option>)}
               </select>
             </label>
           )}
@@ -190,7 +187,7 @@ export function AttentionPanel({ info }: { info: ActivationInfo }) {
                   <button key={h} className="thumb" onClick={() => patchAttn({ head: h, vp: home })} title="Open this head">
                     <div className="thumb-label">
                       <b>H{h}</b>
-                      {m && <span title="entropy (nats) · mass on first token (sink)">e{m.entropy[h].toFixed(2)} · s{m.first_token[h].toFixed(2)}</span>}
+                      {m && <span title={badged.map((s) => s.detail_label).join(" · ")}>{badged.filter((s) => m[s.id]).map((s) => `${s.badge}${m[s.id][h].toFixed(2)}`).join(" · ")}</span>}
                     </div>
                     <ThumbCanvas source={t?.canvas ?? null} />
                   </button>
@@ -236,8 +233,8 @@ export function AttentionPanel({ info }: { info: ActivationInfo }) {
       <aside className="side">
         <div className="card">
           <div className="card-title">Layer × head map</div>
-          <select value={a.stat} onChange={(e) => patchAttn({ stat: e.target.value as AttnStat })}>
-            {(Object.keys(STAT_LABEL) as AttnStat[]).map((s) => <option key={s} value={s}>{STAT_LABEL[s]}</option>)}
+          <select value={a.stat} onChange={(e) => patchAttn({ stat: e.target.value })}>
+            {attnStats.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
           <div className="mini-map">
             <Heatmap
@@ -279,9 +276,9 @@ export function AttentionPanel({ info }: { info: ActivationInfo }) {
             {selectedMetrics && (
               <div className="card small">
                 <div className="kv">
-                  <div><span>entropy</span><b>{selectedMetrics.entropy.toFixed(3)}</b></div>
-                  <div><span>sink mass</span><b>{selectedMetrics.first_token.toFixed(3)}</b></div>
-                  <div><span>distance</span><b>{selectedMetrics.distance.toFixed(2)}</b></div>
+                  {attnStats.filter((s) => selectedMetrics[s.id] !== undefined).map((s) => (
+                    <div key={s.id}><span>{s.detail_label}</span><b>{selectedMetrics[s.id]!.toFixed(s.digits)}</b></div>
+                  ))}
                 </div>
               </div>
             )}
