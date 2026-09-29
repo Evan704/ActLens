@@ -9,11 +9,12 @@ conda create -y -n actlens -c conda-forge python=3.12 nodejs=22
 conda activate actlens
 pip install -e ".[dev]"             # editable install: `actlens` command + pytest, httpx, build
 (cd frontend && npm install)
-./run.sh                            # builds the frontend if needed, then serves UI + API (same as `actlens`)
+./run.sh                            # dev server with hot reload: open http://127.0.0.1:5173
 ```
 
-Hot reload: run `python -m uvicorn actlens.app:app --port 8000` in `backend/` and `npx vite` in `frontend/`
-(proxies `/api` to :8000, UI on :5173). In a source checkout the server serves `frontend/dist` directly.
+`./run.sh` starts Vite (HMR, port 5173, `/api` proxied to the backend) and uvicorn with `--reload` on :8000. Frontend
+edits apply instantly; a backend `.py` edit restarts the server, which reloads the model. `./run.sh --prod` builds the
+frontend if needed and serves UI + API from :8000 without reload (what `actlens` does in a source checkout).
 
 Tests: `cd backend && python -m pytest`, `cd frontend && npx vitest run`.
 Browser e2e (needs `playwright-core` and Chrome; see the header of each script): `frontend/e2e/real.e2e.mjs` drives the real
