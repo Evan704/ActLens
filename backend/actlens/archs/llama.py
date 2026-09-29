@@ -92,8 +92,9 @@ class LlamaAdapter(PreNormBlockAdapter):
 
         cfg = root.config  # the ids stay silu/swiglu; only the names follow the model's real gate activation
         act = getattr(cfg, "hidden_activation", None) or getattr(cfg, "hidden_act", None) or "silu"
-        named = {} if act == "silu" else {
-            "silu": dict(label=f"silu — {act_name}(gate) [{act}]", description=f"The {act} activation applied to gate."),
+        named = {} if act == "silu" and act_name == "act_fn" else {
+            "silu": dict(label=f"silu — {act_name}(gate)" + ("" if act == "silu" else f" [{act}]"),
+                         description=f"The {act} activation applied to gate."),
             "swiglu": dict(label=f"swiglu — {act}(gate)·up",
                            description=f"Product {act}(gate)*up, the input of down_proj (MLP neurons)."),
         }

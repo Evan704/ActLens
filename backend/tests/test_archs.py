@@ -136,6 +136,7 @@ def test_gated_mlp_labels_follow_the_models_activation():
         return {s.id: s.label for s in p.activations()}["silu"]
     assert label("llama") == "silu — act_fn(gate)"
     assert "gelu" in label("gemma")
+    assert label("phi3") == "silu — activation_fn(gate)"  # names the model's real module
 
 
 def test_stablelm_variants_the_llama_adapter_cannot_model():
