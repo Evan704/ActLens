@@ -176,6 +176,20 @@ export interface Stats {
   region: Record<string, number>;
 }
 
+/** /api/run/{id}/logit_lens: the residual stream of one token unembedded after every layer. */
+export interface LogitLens {
+  act: ActId;
+  pos: number;
+  layer_labels: string[];
+  /** [layer][rank] */
+  ids: number[][];
+  tokens: string[][];
+  logprobs: number[][];
+  /** Entropy (nats) of the full next-token distribution at each layer. */
+  entropy: number[];
+  target?: { id: number; logprob: number[]; rank: number[] };
+}
+
 export interface Frame<M> {
   meta: M;
   data: Float32Array;

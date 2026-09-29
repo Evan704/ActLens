@@ -8,7 +8,7 @@ import type { Display } from "./colormaps";
 import type { Cell, Region } from "./figure";
 import { clampViewport, windowViewport, type Viewport } from "./viewport";
 
-export type Mode = "layer" | "across" | "arch";
+export type Mode = "layer" | "across" | "arch" | "lens";
 
 export const ACT_DISPLAY: Display = { cmap: "RdBu", range: "robust", scale: "linear", symmetric: true, manual: [-1, 1] };
 export const SEQ_DISPLAY: Display = { cmap: "viridis", range: "robust", scale: "symlog", symmetric: false, manual: [0, 1] };

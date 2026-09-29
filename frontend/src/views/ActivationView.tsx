@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import { findAct } from "../viewState";
 import { AcrossLayersView } from "./AcrossLayersView";
 import { AttentionPanel } from "./AttentionPanel";
+import { LensView } from "./LensView";
 import { TokenChannelView } from "./TokenChannelView";
 
 /** The single view of the app: selection bar on top, then the view that matches the activation kind and mode. */
@@ -18,6 +19,8 @@ export function ActivationView() {
       <SelectionBar />
       {mode === "arch" ? (
         <ArchDiagram />
+      ) : mode === "lens" ? (
+        <LensView />
       ) : info.kind === "attn" ? (
         <AttentionPanel key={info.id} info={info} />
       ) : mode === "across" ? (

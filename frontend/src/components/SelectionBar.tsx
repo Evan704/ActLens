@@ -1,6 +1,7 @@
 import { actOptionLabel, groupActivations } from "../channels";
 import { useStore, type Mode } from "../store";
 import { findAct } from "../viewState";
+import { LENS_ACTS } from "../views/LensView";
 import { LayerSlider } from "./controls";
 
 /** Activation picker, layer slider and Layer | Across layers toggle: the selection shared by every view. */
@@ -15,6 +16,7 @@ export function SelectionBar() {
   const info = findAct(run, act);
   if (!info) return null;
   const isAttn = info.kind === "attn";
+  const hasLens = run.activations.some((a) => LENS_ACTS.includes(a.id));
   const modes: { id: Mode; label: string; title: string }[] = [
     { id: "layer", label: "Layer", title: isAttn ? "Attention heads of the selected layer" : "Token × channel heatmap of the selected layer" },
     {
@@ -22,6 +24,7 @@ export function SelectionBar() {
       label: "Across layers",
       title: isAttn ? "Not available for attention patterns: the layer × head map on the right shows the same idea" : "Token × layer map of a per-token statistic",
     },
+    { id: "lens", label: "Logit lens", title: "Unembed the residual stream after every layer: what the model would predict at each depth" },
     { id: "arch", label: "Architecture", title: "Decoder-block diagram: click a node to open its activation" },
   ];
   return (
@@ -44,7 +47,7 @@ export function SelectionBar() {
           <button
             key={m.id}
             className={(isAttn && mode === "across" ? "layer" : mode) === m.id ? "on" : ""}
-            disabled={isAttn && m.id === "across"}
+            disabled={(isAttn && m.id === "across") || (m.id === "lens" && !hasLens)}
             title={m.title}
             onClick={() => setMode(m.id)}
           >

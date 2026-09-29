@@ -1,7 +1,7 @@
 import { formatNumber } from "../colormaps";
 
-/** Small line chart of one token's statistic across layers; click to pick a layer. */
-export function Trajectory({ values, labels, active, onPick }: { values: number[]; labels: string[]; active: number; onPick: (i: number) => void }) {
+/** Small line chart of one token's statistic across layers; click to pick a layer. `caption` replaces the min/max line. */
+export function Trajectory({ values, labels, active, onPick, caption }: { values: number[]; labels: string[]; active: number; onPick: (i: number) => void; caption?: (lo: number, hi: number) => string }) {
   const W = 300;
   const H = 110;
   const m = { l: 6, r: 6, t: 8, b: 16 };
@@ -25,7 +25,7 @@ export function Trajectory({ values, labels, active, onPick }: { values: number[
       <circle cx={x(active)} cy={y(values[active])} r="3.5" fill="var(--accent)" />
       <text x={m.l} y={H - 3} fontSize="10" fill="var(--muted)">{labels[0]}</text>
       <text x={W - m.r} y={H - 3} fontSize="10" fill="var(--muted)" textAnchor="end">{labels[labels.length - 1]}</text>
-      <text x={m.l} y={m.t + 2} fontSize="10" fill="var(--muted)">min {formatNumber(lo)} · max {formatNumber(hi)}</text>
+      <text x={m.l} y={m.t + 2} fontSize="10" fill="var(--muted)">{caption ? caption(lo, hi) : `min ${formatNumber(lo)} · max ${formatNumber(hi)}`}</text>
     </svg>
   );
 }
