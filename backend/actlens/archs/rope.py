@@ -1,6 +1,8 @@
 """Rotary position embedding helpers shared by adapters."""
 from __future__ import annotations
 
+import inspect
+
 import torch
 
 from .base import ActDef, Reader, TraceCtx, get
@@ -23,16 +25,35 @@ def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.T
 
 
 def rope_act(raw: Reader, heads: int, head_dim: int) -> ActDef:
-    """`q_rope`/`k_rope`: `raw` reads the pre-RoPE projection (host [T, heads*head_dim]); needs `capture_rope`
-    to have run in the adapter's `prepare`."""
+    """`q_rope`/`k_rope`: `raw` reads the pre-RoPE projection (host [T, heads*head_dim]); needs `rope_tables` to have
+    run in the adapter's `setup`."""
     def read(b, c: TraceCtx):
         x = raw(b, c).reshape(c.n_tokens, heads, head_dim)
-        return apply_rope(x, *c.aux["rope"]).reshape(c.n_tokens, -1)
+        return apply_rope(x, *c.aux["rope"](c.layer)).reshape(c.n_tokens, -1)
     return ActDef(read, heads * head_dim, heads, head_dim)
 
 
-def capture_rope(model, ctx: TraceCtx, act: str, rotary_path: str) -> None:
-    """Stash the model's cos/sin tables in `ctx.aux` when `act` needs them; they are produced before block 0 runs."""
-    if act in ROPE_ACTS:
-        cos, sin = get(model, rotary_path).output
-        ctx.aux["rope"] = (ctx.host(cos), ctx.host(sin))
+def rope_tables(root: torch.nn.Module, ctx: TraceCtx, act: str, rotary_path: str) -> None:
+    """Stash `ctx.aux["rope"]`, a function layer -> (cos, sin) on the host, when `act` needs it.
+
+    The tables come from calling the model's own rotary module on the real model (before the trace), the way its
+    forward pass does. Models whose rotary module takes a `layer_type` (Gemma-3: local and global RoPE) get one table
+    per layer type, chosen by `config.layer_types`."""
+    if act not in ROPE_ACTS:
+        return
+    rot = get(root, rotary_path)
+    p = next(root.parameters())
+    x = torch.zeros(1, ctx.n_tokens, 1, dtype=p.dtype, device=p.device)  # the tables only take dtype/device from x
+    pos = torch.arange(ctx.n_tokens, device=p.device)[None]
+    types = getattr(root.config, "layer_types", None) if "layer_type" in inspect.signature(rot.forward).parameters else None
+    cache: dict = {}
+
+    def tables(layer: int):
+        kind = types[layer] if types else None
+        if kind not in cache:
+            with torch.no_grad():
+                cos, sin = rot(x, pos) if kind is None else rot(x, pos, kind)
+            cache[kind] = (ctx.host(cos), ctx.host(sin))
+        return cache[kind]
+
+    ctx.aux["rope"] = tables

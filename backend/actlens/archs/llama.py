@@ -5,7 +5,7 @@ import torch
 
 from .base import ActDef, Dims, PreNormBlockAdapter, Reader, TraceCtx, get, has
 from .registry import register
-from .rope import capture_rope, rope_act
+from .rope import rope_act, rope_tables
 
 
 @register
@@ -100,5 +100,5 @@ class LlamaAdapter(PreNormBlockAdapter):
         }
         return out
 
-    def prepare(self, model, ctx: TraceCtx, act: str) -> None:
-        capture_rope(model, ctx, act, self.rotary_path)
+    def setup(self, root, ctx, act: str) -> None:
+        rope_tables(root, ctx, act, self.rotary_path)

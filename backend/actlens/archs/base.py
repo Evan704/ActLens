@@ -31,9 +31,10 @@ class Dims:
 @dataclass
 class TraceCtx:
     """Per-capture state handed to readers. `aux` holds values an adapter computes once before the blocks run
-    (see `ArchAdapter.prepare`), e.g. the RoPE cos/sin tables."""
+    (see `ArchAdapter.setup` and `prepare`)."""
     n_tokens: int
     aux: dict[str, Any] = field(default_factory=dict)
+    layer: int = 0  # index of the block being read; set by the provider before each reader runs
 
     def host(self, t: torch.Tensor, dtype: torch.dtype = torch.float32) -> torch.Tensor:
         return t.detach().to(dtype).cpu()
@@ -82,6 +83,10 @@ class ArchAdapter:
         """The activations this model exposes. Keys are registry ids (`capture.REGISTRY`); anything the model
         does not have (QK-norm, RoPE, a gate, ...) is simply left out. Display order is the registry's."""
         raise NotImplementedError
+
+    def setup(self, root: torch.nn.Module, ctx: TraceCtx, act: str) -> None:
+        """Runs before the trace, on the real (un-proxied) model, so modules can be called directly. May stash values
+        in `ctx.aux` for readers, e.g. the per-layer RoPE tables (`rope.rope_tables`). Only do work `act` needs."""
 
     def prepare(self, model, ctx: TraceCtx, act: str) -> None:
         """Runs inside the trace before any block executes; may stash values in `ctx.aux` for readers.

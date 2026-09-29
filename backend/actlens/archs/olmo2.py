@@ -30,7 +30,7 @@ class Olmo2Adapter(LlamaAdapter):
         if has(get(root, self.layers_path)[0], "input_layernorm"):
             return ["(no input_layernorm: this adapter is for post-norm blocks)"]  # e.g. Gemma3 has all the above
         if len(set(getattr(root.config, "layer_types", None) or ())) > 1:
-            # OLMo-3: sliding-window layers use their own RoPE tables, but `prepare` captures a single cos/sin pair
+            # OLMo-3: sliding-window layers use their own RoPE tables, which this adapter does not select per layer
             return ["(mixed layer_types: per-layer-type RoPE and sliding windows are not supported)"]
         return missing
 

@@ -41,7 +41,7 @@ block; everything else (tracing, caching, API, UI) is architecture-neutral.
    stream, norms, attention pattern/context/output and MLP output) and `@register` it. Set `layers_path`, `model_types`,
    and implement `probe` (which modules must exist), `dims` and `acts`. `acts` returns `{activation id: ActDef}`:
    leave out what the model lacks and it simply does not appear in the picker. `archs/gpt2.py` is a complete small example
-   (fused QKV, no RoPE, plain MLP); `archs/llama.py` shows QK-norm and RoPE (`prepare` runs once before the blocks).
+   (fused QKV, no RoPE, plain MLP); `archs/llama.py` shows QK-norm and RoPE (`setup` runs once before the trace and computes the RoPE tables).
 2. Add a tiny random model to `tests/tiny_models.py::TINY`. `tests/test_archs.py` then checks residual sums,
    `attn_pattern == softmax(q k^T)`, `attn_ctx == pattern @ v`, shapes and specs for it, with no download.
 3. Ship it in your own package with the `actlens.archs` entry-point group, or try it without packaging:

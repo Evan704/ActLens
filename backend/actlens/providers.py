@@ -107,10 +107,15 @@ class NNsightProvider:
         model, layers = self.model, self.layers
         ctx = TraceCtx(n_tokens=len(token_ids))
         input_ids = torch.tensor([token_ids], device=self.device)
+        self.adapter.setup(model._model, ctx, act)
+
+        def read_layer(i):
+            ctx.layer = i
+            return read(layers[i], ctx)
 
         with model.trace({"input_ids": input_ids}):
             self.adapter.prepare(model, ctx, act)
-            outs = [read(layers[i], ctx) for i in range(self.dims.n_layers)]
+            outs = [read_layer(i) for i in range(self.dims.n_layers)]
             saved = nnsight.save(outs)
 
         if saved[0] is None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from .base import ActDef, Dims, PreNormBlockAdapter, get, has
 from .registry import register
-from .rope import capture_rope, rope_act
+from .rope import rope_act, rope_tables
 
 
 @register
@@ -49,5 +49,5 @@ class GPTNeoXAdapter(PreNormBlockAdapter):
             out |= {"q_rope": rope_act(qkv(0), H, Dh), "k_rope": rope_act(qkv(1), H, Dh)}
         return out
 
-    def prepare(self, model, ctx, act: str) -> None:
-        capture_rope(model, ctx, act, self.rotary_path)
+    def setup(self, root, ctx, act: str) -> None:
+        rope_tables(root, ctx, act, self.rotary_path)
