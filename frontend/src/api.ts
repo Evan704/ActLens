@@ -55,11 +55,21 @@ export interface ModelInfo {
   arch: string;
 }
 
+export interface LoadProgress {
+  stage: "resolve" | "download" | "load";
+  done: number;
+  total: number | null;
+  elapsed_s: number;
+}
+
 export interface Status {
   state: "idle" | "loading" | "ready" | "error";
   model_id: string | null;
   target: string | null;
   error: string | null;
+  error_hint: string | null;
+  error_detail: string | null;
+  progress: LoadProgress | null;
   info: ModelInfo | null;
   presets: { id: string; label: string }[];
 }

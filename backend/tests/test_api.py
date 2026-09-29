@@ -437,3 +437,38 @@ def test_token_query_sets_cookie_and_redirects():
 def test_no_token_means_open_access():
     c = TestClient(create_app(ModelManager(FakeProvider), autoload=False))
     assert c.get("/api/status").status_code == 200
+
+
+def test_load_progress_and_error_hint():
+    import threading
+    from actlens.loading import LoadProgress
+
+    gate = threading.Event()
+
+    def slow_prefetch(model_id, progress):
+        progress.set_stage("download", 100)
+        progress.add(40)
+        gate.wait(5)
+
+    mgr = ModelManager(factory=FakeProvider, prefetch=slow_prefetch)
+    with TestClient(create_app(mgr, autoload=False)) as c:
+        c.post("/api/models/load", json={"model_id": "fake/model"})
+        for _ in range(100):
+            s = c.get("/api/status").json()
+            if s["progress"] and s["progress"]["stage"] == "download":
+                break
+            time.sleep(0.02)
+        assert s["state"] == "loading" and s["progress"]["done"] == 40 and s["progress"]["total"] == 100
+        gate.set()
+        wait_ready(c)
+        assert c.get("/api/status").json()["progress"] is None
+
+    from actlens.loading import explain
+    assert "gated" in explain("a/b", type("GatedRepoError", (OSError,), {})("401"))[0]
+    nf = type("RepositoryNotFoundError", (OSError,), {})("401 Repository Not Found ... private or gated repo, make sure you are authenticated")
+    assert "not found" in explain("a/b", nf)[0]
+    assert "memory" in explain("a/b", RuntimeError("MPS backend out of memory"))[0]
+    assert "not found" in explain("a/b", OSError("a/b is not a local folder and is not a valid model identifier"))[0]
+    msg, hint = explain("a/b", ValueError("Unsupported architecture for a/b (model_type='x')"))
+    assert "architecture" in msg and hint
+    assert LoadProgress().snapshot()["stage"] == "idle"

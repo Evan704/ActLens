@@ -61,7 +61,11 @@ export function PromptPanel({ status }: { status: Status | undefined }) {
           max tokens <NumberBox value={maxTokens} min={1} max={1024} width={62} onCommit={(v) => setMaxTokens(Math.round(v))} />
         </label>
       </div>
-      {!ready && <div className="muted small">Waiting for the model ({status?.state ?? "connecting"})…</div>}
+      {!ready && (
+        <div className={`small ${status?.state === "error" ? "err" : "muted"}`}>
+          {status?.state === "error" ? "The model failed to load; see the message on the right." : `Waiting for the model (${status?.state ?? "connecting"})…`}
+        </div>
+      )}
       {mut.error && <div className="err">{(mut.error as Error).message}</div>}
       {run && (
         <div className="tokens-block">

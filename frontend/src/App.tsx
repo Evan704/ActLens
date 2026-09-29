@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJSON, type Status } from "./api";
+import { LoadStatus } from "./components/LoadStatus";
 import { ModelBar } from "./components/ModelBar";
 import { PromptPanel } from "./components/PromptPanel";
 import { useStore } from "./store";
@@ -10,7 +11,7 @@ export default function App() {
   const status = useQuery({
     queryKey: ["status"],
     queryFn: ({ signal }) => getJSON<Status>("/api/status", undefined, signal),
-    refetchInterval: (q) => (!q.state.data || q.state.data.state === "loading" ? 1000 : false),
+    refetchInterval: (q) => (!q.state.data ? 1000 : q.state.data.state === "loading" ? 500 : false),
     retry: true,
     staleTime: 0,
   });
@@ -41,7 +42,7 @@ export default function App() {
               <div className="empty">
                 <h2>Look inside a forward pass</h2>
                 <p>Pick a sample prompt or type your own, then run it. ActLens captures activations on demand and lets you browse any of them, at any layer, as heatmaps.</p>
-                {status.data?.state === "loading" && <p className="muted">Loading {status.data.target}… the first run downloads the weights.</p>}
+                <LoadStatus status={status.data} />
               </div>
             ) : (
               <ActivationView />

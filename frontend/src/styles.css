@@ -99,3 +99,16 @@ textarea { width: 100%; resize: vertical; background: var(--panel); border: 1px 
 .mini-map .heatmap { height: 100%; }
 
 @media (max-width: 1100px) { .view { grid-template-columns: 1fr; } .side { max-height: 40vh; } }
+
+.loadstatus { margin: 24px auto 0; max-width: 460px; text-align: left; }
+.loadstatus .headline { font-weight: 600; color: var(--fg); margin-bottom: 8px; word-break: break-word; }
+.loadstatus .bar { height: 8px; border-radius: 999px; background: var(--ctl); border: 1px solid var(--border); overflow: hidden; margin-bottom: 6px; }
+.loadstatus .bar > div { height: 100%; background: var(--accent); transition: width 0.4s ease; }
+.loadstatus .bar.indeterminate > div { width: 35%; animation: ls-slide 1.2s ease-in-out infinite alternate; }
+@keyframes ls-slide { from { margin-left: 0; } to { margin-left: 65%; } }
+@media (prefers-reduced-motion: reduce) { .loadstatus .bar.indeterminate > div { animation: none; width: 100%; opacity: 0.5; } }
+.loadstatus.error { border: 1px solid var(--err); border-radius: 8px; padding: 12px 14px; background: var(--panel); }
+.loadstatus.error .headline { color: var(--err); }
+.loadstatus.error p { margin: 0 0 10px; color: var(--fg); }
+.loadstatus.error details { margin-bottom: 10px; } .loadstatus.error summary { cursor: pointer; }
+.loadstatus.error pre { white-space: pre-wrap; word-break: break-word; font: 11px ui-monospace, Menlo, monospace; max-height: 160px; overflow: auto; margin: 6px 0 0; }

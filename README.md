@@ -132,6 +132,8 @@ Want another architecture? See [Adding an architecture](https://github.com/Evan7
   not return attention probabilities.
 - **Slow first open of an activation.** The first time you open an activation, one forward pass captures it for every
   layer (about 0.1–0.4 s for Qwen3-0.6B); after that it comes from the cache.
+- **Gated or private models.** Accept the license on huggingface.co and run `huggingface-cli login` (or set `HF_TOKEN`)
+  before loading them. The UI shows download progress and, if a load fails, why and what to try.
 - **Running out of memory.** Use a smaller model, `--dtype float16` or `bfloat16`, or lower `--cache-mb`.
 
 ## Contributing

@@ -41,7 +41,7 @@ export function ModelBar({ status }: { status: Status | undefined }) {
       <div className={`pill ${status?.state ?? "idle"}`}>
         {status?.state === "loading" && `loading ${status.target}…`}
         {status?.state === "ready" && info && `${info.arch} · ${info.params_m}M · ${info.n_layers}L · d=${info.hidden_size} · ${info.device}/${info.dtype}`}
-        {status?.state === "error" && <span title={status.error ?? ""}>load failed: {status.error?.slice(0, 90)}</span>}
+        {status?.state === "error" && <span title={status.error ?? ""}>load failed</span>}
         {(!status || status.state === "idle") && "connecting…"}
       </div>
       {load.error && <span className="err">{(load.error as Error).message}</span>}
