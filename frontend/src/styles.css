@@ -30,7 +30,13 @@ textarea { width: 100%; resize: vertical; background: var(--panel); border: 1px 
 .inline { display: inline-flex; align-items: center; gap: 6px; }
 .pill { margin-left: auto; padding: 3px 10px; border-radius: 999px; background: var(--ctl); font-size: 12px; color: var(--muted); }
 .pill.ready { color: var(--ok); } .pill.error { color: var(--err); } .pill.loading { color: var(--accent); }
-.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; position: relative; }
+.body.collapsed { grid-template-columns: 0 1fr; }
+.body.collapsed .prompt-panel { display: none; }
+.body > .center { grid-column: 2; }
+.panel-toggle { position: absolute; top: 10px; left: 320px; transform: translateX(-50%); z-index: 5; width: 18px; height: 36px; padding: 0; line-height: 1; border-radius: 9px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); cursor: pointer; }
+.panel-toggle:hover { color: var(--fg); }
+.body.collapsed .panel-toggle { left: 0; transform: translateX(2px); }
 .prompt-panel { padding: 12px; border-right: 1px solid var(--border); background: var(--panel); overflow: auto; display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 12px; } .field select { color: var(--fg); }
 .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

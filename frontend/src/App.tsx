@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJSON, type Status } from "./api";
 import { LoadStatus } from "./components/LoadStatus";
@@ -16,6 +16,13 @@ export default function App() {
     staleTime: 0,
   });
   const run = useStore((s) => s.run);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("actlens.promptCollapsed") === "1"; } catch { return false; }
+  });
+  const toggle = () => setCollapsed((c) => {
+    try { localStorage.setItem("actlens.promptCollapsed", c ? "0" : "1"); } catch { /* storage unavailable */ }
+    return !c;
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -34,8 +41,15 @@ export default function App() {
   return (
     <div className="app">
       <ModelBar status={status.data} />
-      <div className="body">
+      <div className={"body" + (collapsed ? " collapsed" : "")}>
         <PromptPanel status={status.data} />
+        <button
+          className="panel-toggle"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Show prompt panel" : "Hide prompt panel"}
+          title={collapsed ? "Show prompt panel" : "Hide prompt panel"}
+        >{collapsed ? "›" : "‹"}</button>
         <section className="center">
           <div className="content">
             {!active ? (
