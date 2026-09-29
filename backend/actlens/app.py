@@ -189,8 +189,10 @@ def create_app(manager: ModelManager | None = None, autoload: bool = True, model
             if request.method == "GET" and valid(request.query_params.get("token")):
                 url = request.url.remove_query_params("token")
                 resp = RedirectResponse(url.path + (f"?{url.query}" if url.query else ""), status_code=303)
-                resp.set_cookie(TOKEN_COOKIE, token, httponly=True, samesite="strict",
-                                secure=request.url.scheme == "https")
+                # Lax, not Strict: the link is usually opened from another site (Colab), and a Strict cookie is
+                # not sent on the redirect that follows a cross-site navigation.
+                https = "https" in (request.url.scheme, request.headers.get("x-forwarded-proto", ""))
+                resp.set_cookie(TOKEN_COOKIE, token, httponly=True, samesite="lax", secure=https)
                 return resp
             return PlainTextResponse("ActLens: missing or invalid access token. Open the full link printed "
                                      "by the server (it ends in ?token=...).", status_code=401)

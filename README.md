@@ -59,7 +59,7 @@ No local GPU? Run the model on a free Colab GPU and view the visualization in yo
 Or in any notebook:
 
 ```python
-!pip install -q -U actlens
+!pip install -q actlens
 from actlens.colab import launch
 launch(model="Qwen/Qwen3-0.6B", dtype="float16")
 ```

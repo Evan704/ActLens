@@ -15,6 +15,7 @@ import secrets
 import stat
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -40,18 +41,34 @@ def _cloudflared() -> str:
     return str(path)
 
 
-def _wait_ready(base: str, token: str, proc: subprocess.Popen, timeout: float) -> None:
+def _wait_ready(base: str, token: str, proc: subprocess.Popen, timeout: float, log: str) -> None:
     req = urllib.request.Request(f"{base}/api/status", headers={"Authorization": f"Bearer {token}"})
     deadline = time.time() + timeout
     while time.time() < deadline:
         if proc.poll() is not None:
-            raise RuntimeError(f"actlens server exited early (code {proc.returncode}); see actlens.log")
+            tail = Path(log).read_text()[-1500:] if Path(log).is_file() else ""
+            raise RuntimeError(f"actlens server exited early (code {proc.returncode}):\n{tail}")
         try:
             urllib.request.urlopen(req, timeout=2).close()
             return
         except OSError:
             time.sleep(1)
     raise TimeoutError("actlens server did not start; see actlens.log")
+
+
+def _wait_public(url: str, token: str, tunnel: subprocess.Popen, timeout: float) -> None:
+    """The tunnel URL is printed before the tunnel is connected (Cloudflare error 1033 until then)."""
+    req = urllib.request.Request(f"{url}/api/status", headers={"Authorization": f"Bearer {token}"})
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if tunnel.poll() is not None:
+            raise RuntimeError(f"cloudflared exited (code {tunnel.returncode})")
+        try:
+            urllib.request.urlopen(req, timeout=5).close()
+            return
+        except OSError:  # HTTPError (530/1033), DNS not propagated yet, timeouts
+            time.sleep(2)
+    raise TimeoutError("the tunnel did not become reachable; try launch() again")
 
 
 def stop() -> None:
@@ -68,10 +85,11 @@ def launch(model: str = "Qwen/Qwen3-0.6B", *, dtype: str = "float16", device: st
     token = secrets.token_urlsafe(24)
     server = subprocess.Popen(
         [sys.executable, "-m", "actlens.cli", "-m", model, "--device", device, "--dtype", dtype,
-         "--port", str(port), "--token", token],
+         "--port", str(port)],
+        env={**os.environ, "ACTLENS_TOKEN": token},  # not an argv entry: a token starting with "-" breaks argparse
         stdout=open(log, "w"), stderr=subprocess.STDOUT)
     _procs.append(server)
-    _wait_ready(f"http://127.0.0.1:{port}", token, server, timeout)
+    _wait_ready(f"http://127.0.0.1:{port}", token, server, timeout, log)
 
     tunnel = subprocess.Popen([_cloudflared(), "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{port}"],
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -86,10 +104,21 @@ def launch(model: str = "Qwen/Qwen3-0.6B", *, dtype: str = "float16", device: st
     if base is None:
         stop()
         raise RuntimeError("could not open a tunnel:\n" + seen[-1000:])
-    # drain the tunnel's output so its pipe never fills up
-    import threading
-    threading.Thread(target=lambda: [None for _ in tunnel.stdout], daemon=True).start()
+    # keep draining the tunnel's output (so its pipe never fills up) into a log file
+    def drain():
+        with open("cloudflared.log", "w") as f:
+            f.write(seen)
+            for line in tunnel.stdout:
+                f.write(line)
+                f.flush()
 
+    threading.Thread(target=drain, daemon=True).start()
+
+    try:
+        _wait_public(base, token, tunnel, timeout=90)
+    except Exception:
+        stop()
+        raise
     url = f"{base}/?token={token}"
     print("ActLens is running. Open this private link in your browser (keep this Colab tab open):\n" + url)
     try:

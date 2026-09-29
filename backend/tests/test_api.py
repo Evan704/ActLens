@@ -424,7 +424,13 @@ def test_token_query_sets_cookie_and_redirects():
     c = TestClient(create_app(ModelManager(FakeProvider), autoload=False, token="s3cret"), follow_redirects=False)
     r = c.get("/api/status?token=s3cret")
     assert r.status_code == 303 and r.headers["location"] == "/api/status"
-    assert "actlens_token=s3cret" in r.headers["set-cookie"] and "HttpOnly" in r.headers["set-cookie"]
+    cookie = r.headers["set-cookie"]
+    assert "actlens_token=s3cret" in cookie and "HttpOnly" in cookie
+    assert "samesite=lax" in cookie.lower()  # Strict would be dropped on the redirect after a cross-site click
+    assert "secure" not in cookie.lower()
+    fresh = TestClient(create_app(ModelManager(FakeProvider), autoload=False, token="s3cret"), follow_redirects=False)
+    r = fresh.get("/api/status?token=s3cret", headers={"x-forwarded-proto": "https"})  # behind a TLS-terminating tunnel
+    assert "secure" in r.headers["set-cookie"].lower()
     assert c.get("/api/status").status_code == 200  # the cookie is now sent
 
 
