@@ -75,6 +75,26 @@ your session, so do not share it. Use `actlens.colab.stop()` to shut everything 
 
 You can also protect a server of your own with `actlens --token` (generates a token and prints the URL) or `--token VALUE`.
 
+### Remote server (SSH)
+
+Run the model on a GPU server and view it in your local browser. The server only listens on `127.0.0.1`, so forward the port over SSH:
+
+```bash
+# on the server (inside tmux or screen so it survives a disconnect)
+pip install actlens
+actlens --device cuda --dtype bfloat16
+
+# on your machine
+ssh -L 8000:127.0.0.1:8000 user@server      # then open http://127.0.0.1:8000
+```
+
+**VS Code Remote-SSH forwards the port for you.** Connect to the server, run `actlens` in the integrated terminal, and
+VS Code detects the listening port and lists it in the **Ports** panel. Click the link there (or the globe icon) to open
+the UI in your local browser. No `ssh -L` needed.
+
+The weights are downloaded on the server, so it needs access to the Hugging Face Hub (set `HF_ENDPOINT` for a mirror, and
+`HF_TOKEN` for gated models). On a shared machine, add `--token` so other users cannot use your session.
+
 ## Using the viewer
 
 Pick an **activation** and a **layer** in the selection bar (`[` and `]` step through layers), then choose a view.
