@@ -16,8 +16,9 @@ MLP internals and more. It runs locally, in one command.
 
 - **Every activation, every layer.** Residual stream, attention (Q, K, V, RoPE, patterns, context, output) and MLP
   (gate, up, SwiGLU, down), captured lazily and cached.
-- **Two views.** *Layer* shows a token × channel heatmap for one layer; *Across layers* shows a per-token statistic
-  (L2 norm, |max|, mean, std, kurtosis, or a single channel) for every layer at once.
+- **Four views.** *Layer* shows a token × channel heatmap for one layer; *Across layers* shows a per-token statistic
+  (L2 norm, |max|, mean, std, kurtosis, or a single channel) for every layer at once; *Architecture* draws the
+  decoder block and opens any node's activation; *Logit lens* shows what the model would predict after every layer.
 - **Attention explorer.** A grid of all heads, a full query × key map per head, and a layer × head map of entropy,
   sink mass and attention distance.
 - **Find outlier channels.** Rank channels by |max|, std or |mean|; jump straight to a head.
@@ -121,6 +122,21 @@ The picker lists only what the loaded model provides.
 | Residual | `resid_pre`, `resid_mid`, `resid_post` |
 | Attention | `attn_norm`, `q`, `k`, `v`, `q_norm`, `k_norm`, `q_rope`, `k_rope`, `attn_pattern`, `attn_ctx`, `o` |
 | MLP | `mlp_norm`, `gate`, `up`, `silu`, `swiglu`, `mlp_act`, `down` |
+
+### Logit lens
+
+*Logit lens* unembeds the residual stream of one token after every layer, using the model's own final norm and output
+head (including Gemma's final logit soft-capping), and lists the top-k tokens with their probabilities.
+
+- Pick the token position from the strip above the table, the stream (`resid_pre`, `resid_mid` or `resid_post`) and k.
+- **Track** follows one token through the layers (by default the next token of your prompt): its rank and probability
+  get a column of their own, and the side panel plots the rank across layers and the layer where it first becomes top-1.
+  The side panel also plots the entropy of the next-token distribution.
+- The last layer's `resid_post` reproduces the model's real output. Early layers are often noise, because the residual
+  stream is not yet in the space the output head reads; the lens gets sharper with depth, and more so on some models
+  (GPT-2) than on others.
+- Only one position is unembedded per request, so it stays cheap even with a large vocabulary. The API is
+  `GET /api/run/{run_id}/logit_lens?act=resid_post&pos=-1&k=10&target=<token id>`.
 
 ### Distribution panel
 
