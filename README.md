@@ -1,151 +1,132 @@
 # ActLens
 
-Interactive viewer for the activations of a Hugging Face model during a forward pass.
-Python backend (FastAPI + nnsight) captures activations; a React + TypeScript frontend browses them as heatmaps.
+**See inside a language model while it reads your prompt.**
 
-## Install
+ActLens is an interactive viewer for the activations of any supported Hugging Face model. Type a prompt, pick an
+activation and a layer, and browse the result as a token × channel heatmap: residual stream, attention patterns, Q/K/V,
+MLP internals and more. It runs locally, in one command.
 
-```bash
-pip install actlens          # bundles the web UI; needs Python >= 3.10
-actlens                      # loads Qwen/Qwen3-0.6B and serves UI + API on http://127.0.0.1:8000
-```
+[![PyPI](https://img.shields.io/pypi/v/actlens)](https://pypi.org/project/actlens/)
+[![Python](https://img.shields.io/pypi/pyversions/actlens)](https://pypi.org/project/actlens/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Evan704/ActLens/blob/main/LICENSE)
 
-The first run downloads the model weights from the Hugging Face Hub. Only the versions the project is developed
-against are tested (torch 2, transformers 5, nnsight 0.7); use a fresh virtual environment.
+## Features
 
-```bash
-actlens -m Qwen/Qwen2.5-0.5B            # another HF model id or a local path
-actlens --device cuda --dtype bfloat16  # device: auto | cpu | cuda | mps; dtype: float32 | float16 | bfloat16
-actlens --port 9000 --open              # custom port, open the browser when the server is up
-actlens --cache-mb 4096                 # activation cache budget (also $ACTLENS_CACHE_MB)
-```
+- **Every activation, every layer.** Residual stream, attention (Q, K, V, RoPE, patterns, context, output) and MLP
+  (gate, up, SwiGLU, down), captured lazily and cached.
+- **Two views.** *Layer* shows a token × channel heatmap for one layer; *Across layers* shows a per-token statistic
+  (L2 norm, |max|, mean, std, kurtosis, or a single channel) for every layer at once.
+- **Attention explorer.** A grid of all heads, a full query × key map per head, and a layer × head map of entropy,
+  sink mass and attention distance.
+- **Find outlier channels.** Rank channels by |max|, std or |mean|; jump straight to a head.
+- **Distributions.** Histograms and summary statistics over a region, a channel, a token, or the whole layer.
+- **Fast to navigate.** Pan, zoom, brush and inspect; large activations are pooled server-side so zooming out stays cheap.
+- **Publication-ready export.** PNG and PDF with title, prompt, axes and colorbar at up to 4×.
+- **Extensible.** Add support for a new architecture with a small adapter.
 
-More models can be loaded from the UI at any time. The server binds to `127.0.0.1` by default: the API can load any
-model and has no authentication, so `--host 0.0.0.0` prints a warning and should only be used on a trusted network.
-
-## Development
-
-The dev environment is a conda env named `actlens` (Python 3.12 + Node 22); activate it before running anything below.
-
-```bash
-conda create -y -n actlens -c conda-forge python=3.12 nodejs=22
-conda activate actlens
-pip install -e ".[dev]"             # editable install: `actlens` command + pytest, httpx, build
-(cd frontend && npm install)
-./run.sh                            # builds the frontend if needed, then serves UI + API (same as `actlens`)
-```
-
-Hot reload: run `python -m uvicorn actlens.app:app --port 8000` in `backend/` and `npx vite` in `frontend/`
-(proxies `/api` to :8000, UI on :5173). In a source checkout the server serves `frontend/dist` directly.
-
-Tests: `cd backend && python -m pytest`, `cd frontend && npx vitest run`.
-Browser e2e (needs `playwright-core` and Chrome; see the header of each script): `frontend/e2e/real.e2e.mjs` drives the real
-backend (every activation, head jump, distribution modes, exports), `ui.e2e.mjs` and `distribution.mjs` run against mocks.
-
-### Releasing
-
-The wheel bundles the built UI as `actlens/static` (`hatch_build.py` copies `frontend/dist`; the build fails if it is
-missing). The version lives in `backend/actlens/__init__.py`.
+## Quick start
 
 ```bash
-(cd frontend && npm ci && npm run build)
-python -m build                     # dist/actlens-<version>.tar.gz and .whl
-twine upload dist/*                 # or: twine upload --repository testpypi dist/*
+pip install actlens      # Python >= 3.10; use a fresh virtual environment
+actlens                  # loads Qwen/Qwen3-0.6B and serves the UI at http://127.0.0.1:8000
 ```
 
-## Views
+The first run downloads the model weights from the Hugging Face Hub. ActLens is developed and tested against
+torch 2, transformers 5 and nnsight 0.7.
 
-One page. Pick an **activation** and a **layer** in the selection bar (`[` `]` step the layer); the mode toggle
-switches between two views of that activation:
+```bash
+actlens -m Qwen/Qwen2.5-0.5B             # another Hugging Face model id or a local path
+actlens --device cuda --dtype bfloat16   # device: auto | cpu | cuda | mps; dtype: float32 | float16 | bfloat16
+actlens --port 9000 --open               # custom port, open the browser when ready
+actlens --cache-mb 4096                  # activation cache budget (or $ACTLENS_CACHE_MB)
+```
 
-- **Layer** — token × channel heatmap of the chosen layer (window, minimap of per-channel |max|, ordering, pooling,
-  colormap/range/scale, brush/cursor, export). For `attn_pattern` it is the attention view instead: a grid of all heads,
-  click one for the full query × key map, plus a layer × head statistic map (entropy / sink mass / distance).
-- **Across layers** — token × layer map of a per-token statistic (L2 norm, |max|, mean, std, kurtosis, or one channel).
-  Click a cell to jump to that layer with the token cursor placed.
+You can load more models from the UI at any time.
 
-Activations (the picker only lists what the loaded model has; see [Supported architectures](#supported-architectures)):
+> **Security note.** The server binds to `127.0.0.1` by default. The API can load any model and has no
+> authentication, so only use `--host 0.0.0.0` on a network you trust.
+
+### Google Colab
+
+Start the server in the background, then open it through Colab's port proxy:
+
+```python
+!pip install -q actlens
+
+import subprocess
+subprocess.Popen(["actlens", "--device", "cuda", "--dtype", "float16", "--port", "8000"],
+                 stdout=open("actlens.log", "w"), stderr=subprocess.STDOUT)
+
+from google.colab import output
+output.serve_kernel_port_as_window(8000)
+```
+
+Check `actlens.log` if the page does not load; the first start downloads the model.
+
+## Using the viewer
+
+Pick an **activation** and a **layer** in the selection bar (`[` and `]` step through layers), then choose a view.
+
+| Interaction | Action |
+|---|---|
+| Drag | Pan |
+| Pinch, or ⌘/Ctrl + scroll | Zoom |
+| Shift + drag | Select a region |
+| Click | Place the cursor |
+| Double-click | Reset the view |
+| `[` / `]` | Previous / next layer |
+| Esc | Clear the selection |
+
+For head-structured activations (`q k v q_norm k_norm q_rope k_rope attn_ctx`) the channel axis is `head × head_dim`,
+with ticks like `h3·17` and faint separators between heads; the **Head** control jumps the window to one head.
+
+### Available activations
+
+The picker lists only what the loaded model provides.
 
 | Group | Activations |
 |---|---|
-| Residual | `resid_pre` (attn_norm input), `resid_mid` (mlp_norm input), `resid_post` |
-| Attention | `attn_norm`, `q`, `k`, `v`, `q_norm`/`k_norm` (models with QK-norm), `q_rope`/`k_rope` (after RoPE), `attn_pattern`, `attn_ctx` (o_proj input), `o` |
-| MLP | `mlp_norm`, `gate`, `up`, `silu`, `swiglu` (= down_proj input) for gated MLPs; `up`, `mlp_act` (= down_proj input) for plain MLPs; `down` |
-
-Activations are captured lazily: the first time you open one, a forward pass records it for every layer (~0.1–0.4 s
-for Qwen3-0.6B) and it is cached (`ACTLENS_CACHE_MB`, default 2048).
-
-Heatmaps only render a window (default 64 tokens × 128 channels). The server pools anything larger than the pixel
-budget, so zooming all the way out is cheap. Channels can be ranked by |max| / std / |mean| to surface outlier channels.
-For head-structured activations (`q k v q_norm k_norm q_rope k_rope attn_ctx`) the channel axis is `head × head_dim`:
-axis ticks read `h3·17`, faint separators mark head boundaries, and the **Head** control jumps the window to one head.
-
-Interaction: drag = pan · pinch or ⌘/Ctrl + scroll = zoom · scroll = pan · Shift + drag = select region ·
-click = cursor · double-click = reset · `[` `]` = previous/next layer · Esc = clear selection.
+| Residual | `resid_pre`, `resid_mid`, `resid_post` |
+| Attention | `attn_norm`, `q`, `k`, `v`, `q_norm`, `k_norm`, `q_rope`, `k_rope`, `attn_pattern`, `attn_ctx`, `o` |
+| MLP | `mlp_norm`, `gate`, `up`, `silu`, `swiglu`, `mlp_act`, `down` |
 
 ### Distribution panel
 
-- **Values** — histogram and summary (mean/std/percentiles/kurtosis/skew) of the raw values; scope = visible window,
-  brushed selection, the cursor's **channel** (over all tokens), the cursor's **token** (over all channels), or the whole layer.
-- **Per channel** — pick a statistic (|max|, std, mean, norm, kurtosis): one number per channel (computed over tokens),
-  shown as a histogram across channels with a clickable top-channels list.
-- **Per token** — the same, one number per token (computed over channels), with a clickable top-tokens list.
-- In both per-axis modes, an **Inside the selected channel / token** section shows the histogram (and summary) of the values
-  inside the cursor's channel (over the region's tokens) or token (over the region's channels) — the values that its
-  statistic was computed from. The overall distribution stays above it, with the selected item's statistic marked in blue.
-  Click a heatmap cell or a top-list entry to change the selection.
+- **Values**: histogram and summary (mean, std, percentiles, kurtosis, skew) of the raw values for the visible window,
+  a brushed selection, the cursor's channel or token, or the whole layer.
+- **Per channel / Per token**: one statistic per channel or token, shown as a histogram with a clickable list of the
+  top outliers.
 
-## Export
+### Export
 
-PNG and PDF buttons render the current view (title, prompt, window, colormap settings, axes, colorbar) at 1–4×.
-The histogram and the attention head grid have their own PNG export. The PDF embeds the figure as a high-resolution
-image rather than vector graphics, so CJK tokens render correctly.
+The PNG and PDF buttons render the current view at 1–4×. The histogram and the attention head grid have their own PNG
+export. PDFs embed the figure as a high-resolution image so CJK tokens render correctly.
 
-## Supported architectures
+## Supported models
 
 | Adapter | `model_type` | Models |
 |---|---|---|
-| `llama` | `llama`, `qwen2`, `qwen3`, `mistral` (+ any model with the same module layout) | Llama, Qwen2/2.5/3, Mistral, SmolLM |
+| `llama` | `llama`, `qwen2`, `qwen3`, `mistral`, and models with the same module layout | Llama, Qwen2/2.5/3, Mistral, SmolLM |
 | `gpt2` | `gpt2` | GPT-2, DistilGPT-2 |
 
-Only Qwen3-0.6B and GPT-2 have been tested on real checkpoints; every adapter is also tested on a tiny random model.
-Anything else is rejected at load time with a message naming the missing modules.
+Qwen3-0.6B and GPT-2 are tested on real checkpoints; every adapter is also tested on a tiny random model. An
+unsupported model is rejected at load time with a message naming the missing modules.
 
-### Adding an architecture
+Want another architecture? See [Adding an architecture](https://github.com/Evan704/ActLens/blob/main/CONTRIBUTING.md#adding-an-architecture).
 
-An adapter (`backend/actlens/archs/`) tells ActLens which activations a model family has and how to read each one from a
-block; everything else (tracing, caching, API, UI) is architecture-neutral.
+## Troubleshooting
 
-1. Subclass `ArchAdapter` (or `PreNormBlockAdapter` for sequential pre-norm blocks, which already covers the residual
-   stream, norms, attention pattern/context/output and MLP output) and `@register` it. Set `layers_path`, `model_types`,
-   and implement `probe` (which modules must exist), `dims` and `acts`. `acts` returns `{activation id: ActDef}`:
-   leave out what the model lacks and it simply does not appear in the picker. `archs/gpt2.py` is a complete small example
-   (fused QKV, no RoPE, plain MLP); `archs/llama.py` shows QK-norm and RoPE (`prepare` runs once before the blocks).
-2. Add a tiny random model to `tests/tiny_models.py::TINY`. `tests/test_archs.py` then checks residual sums,
-   `attn_pattern == softmax(q k^T)`, `attn_ctx == pattern @ v`, shapes and specs for it, with no download.
-3. Ship it in your own package with the `actlens.archs` entry-point group, or try it without packaging:
-   `actlens --arch-module ./my_arch.py` (also `$ACTLENS_ARCH_MODULES`).
+- **Attention patterns need eager attention.** ActLens loads models with `attn_implementation="eager"` because SDPA does
+  not return attention probabilities.
+- **Slow first open of an activation.** The first time you open an activation, one forward pass captures it for every
+  layer (about 0.1–0.4 s for Qwen3-0.6B); after that it comes from the cache.
+- **Running out of memory.** Use a smaller model, `--dtype float16` or `bfloat16`, or lower `--cache-mb`.
 
-## Notes
+## Contributing
 
-- Model loading: `device_map="mps"` hangs with transformers 5.x, so the model is loaded on CPU and then moved.
-- Attention capture needs `attn_implementation="eager"` (SDPA doesn't return probabilities).
-- Activations (`backend/actlens/capture.py` registry): residual stream
-  (`resid_pre/mid/post`), attention (`attn_norm, q, k, v, q_norm, k_norm, q_rope, k_rope, attn_pattern, attn_ctx, o`),
-  MLP (`mlp_norm, gate, up, silu, swiglu, mlp_act, down`). `/api/run` lists only what the loaded model's adapter exposes
-  (Llama-style: `q_norm`/`k_norm` need QK-norm modules and `q_rope`/`k_rope` need a `rotary_emb` module; RoPE is applied
-  from `rotary_emb`'s cos/sin, since `apply_rotary_pos_emb` is a function, not a hookable module).
-- Lazy capture: `POST /api/run` only tokenizes. The first data request for an activation runs one forward pass on the
-  model thread that captures exactly that activation for all layers (~60-400 ms for Qwen3-0.6B at 64 tokens); results
-  are kept in a byte-budgeted LRU keyed by `(run_id, act)` (`ACTLENS_CACHE_MB`, default 2048; the entry just built is never
-  evicted). Concurrent requests for the same activation share one capture. Only the last 3 runs are registered.
-- `GET /api/run/{id}/axis_stats` gives the distribution of a per-channel or per-token statistic over a region;
-  the maths is in `slicing.py` (`axis_stats`, `axis_stat_values`).
-- Tests: `cd backend && python -m pytest` runs fast fake-provider tests, the per-architecture contract tests on tiny
-  random models (`tests/test_archs.py`), and the real-model tests `tests/test_real_model.py` (Qwen3-0.6B identities incl.
-  recomputing attention probabilities from `q_rope`/`k_rope`) and `tests/test_real_gpt2.py` (~10 s). Real-model modules
-  are skipped when the checkpoint is not in the local HF cache or `ACTLENS_SKIP_REAL=1`.
+Development setup, tests, architecture notes and the release process are in
+[CONTRIBUTING.md](https://github.com/Evan704/ActLens/blob/main/CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/Evan704/ActLens/blob/main/LICENSE)
