@@ -1,0 +1,50 @@
+name: Release (TestPyPI)
+
+# Manual dry run of the release to https://test.pypi.org: Actions -> "Release (TestPyPI)" -> Run workflow.
+# TestPyPI versions are immutable, so the build stamps a unique dev version (<version>.dev<run number>, e.g.
+# 0.1.0.dev7) into the runner's copy of the code. Nothing is committed: the repository keeps the real version.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Stamp a unique dev version
+        run: |
+          sed -i -E "s/^(__version__ = \"[^\"]+)\"/\1.dev${GITHUB_RUN_NUMBER}\"/" backend/actlens/__init__.py
+          grep __version__ backend/actlens/__init__.py
+      - name: Build the frontend and the distributions
+        run: |
+          (cd frontend && npm ci && npm run build)
+          pip install build twine
+          python -m build
+          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write  # Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
