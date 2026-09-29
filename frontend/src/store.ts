@@ -89,7 +89,7 @@ export const useStore = create<State>((set, get) => {
         act: id,
         layer: clampLayer(get().layer, to),
         // attention patterns have no "across layers" map (the layer x head map replaces it)
-        mode: to.kind === "attn" ? "layer" : get().mode,
+        mode: to.kind === "attn" && get().mode === "across" ? "layer" : get().mode,
         tok: sw.tok,
         memory: sw.memory,
         across: { ...across, vp: homeViewport(to.n_layers, run.tokens.length) },

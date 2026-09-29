@@ -1,3 +1,4 @@
+import { ArchDiagram } from "../components/ArchDiagram";
 import { SelectionBar } from "../components/SelectionBar";
 import { useStore } from "../store";
 import { findAct } from "../viewState";
@@ -15,7 +16,9 @@ export function ActivationView() {
   return (
     <div className="activation">
       <SelectionBar />
-      {info.kind === "attn" ? (
+      {mode === "arch" ? (
+        <ArchDiagram />
+      ) : info.kind === "attn" ? (
         <AttentionPanel key={info.id} info={info} />
       ) : mode === "across" ? (
         <AcrossLayersView key={`across-${info.id}`} info={info} />

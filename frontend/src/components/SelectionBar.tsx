@@ -22,6 +22,7 @@ export function SelectionBar() {
       label: "Across layers",
       title: isAttn ? "Not available for attention patterns: the layer × head map on the right shows the same idea" : "Token × layer map of a per-token statistic",
     },
+    { id: "arch", label: "Architecture", title: "Decoder-block diagram: click a node to open its activation" },
   ];
   return (
     <div className="selbar">
@@ -42,7 +43,7 @@ export function SelectionBar() {
         {modes.map((m) => (
           <button
             key={m.id}
-            className={(isAttn ? "layer" : mode) === m.id ? "on" : ""}
+            className={(isAttn && mode === "across" ? "layer" : mode) === m.id ? "on" : ""}
             disabled={isAttn && m.id === "across"}
             title={m.title}
             onClick={() => setMode(m.id)}
