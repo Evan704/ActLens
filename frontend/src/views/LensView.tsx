@@ -10,6 +10,9 @@ import { fmtToken } from "../tokens";
 export const LENS_ACTS = ["resid_pre", "resid_mid", "resid_post"];
 type TargetMode = "next" | "none" | "custom";
 
+/** Percentage that stays short for vanishing probabilities, so the tracked column keeps a bounded width. */
+const fmtPct = (p: number) => (p >= 1e-4 ? `${(p * 100).toPrecision(2)}%` : "<0.01%");
+
 /** Logit lens: the residual stream of one token position, unembedded after every layer (top-k table + target rank). */
 export function LensView() {
   const run = useStore((s) => s.run)!;
@@ -89,7 +92,9 @@ export function LensView() {
                   <tr key={l} className={l === active ? "active" : ""}>
                     <td className="layer" onClick={() => setLayer(l)}>{labels[l]}</td>
                     {d.target && (
-                      <td className="lens-tgt">rank <b>{d.target.rank[l]}</b> · {(Math.exp(d.target.logprob[l]) * 100).toPrecision(2)}%</td>
+                      <td className="lens-tgt" title={`rank ${d.target.rank[l]} · p = ${Math.exp(d.target.logprob[l]).toPrecision(3)}`}>
+                        rank <b>{d.target.rank[l]}</b> · {fmtPct(Math.exp(d.target.logprob[l]))}
+                      </td>
                     )}
                     {ids.map((id, r) => {
                       const p = Math.exp(d.logprobs[l][r]);

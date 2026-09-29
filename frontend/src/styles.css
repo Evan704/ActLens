@@ -145,9 +145,9 @@ textarea { width: 100%; resize: vertical; background: var(--panel); border: 1px 
 .lens-cell::before { content: ""; position: absolute; inset: 0; background: var(--accent); opacity: var(--p, 0); border-radius: inherit; }
 .lens-cell > * { position: relative; }
 .lens-table table { table-layout: fixed; min-width: max-content; }
-.lens-table th { width: 92px; } .lens-table th:first-child { width: 40px; } .lens-table th.tgt { width: 120px; }
+.lens-table th { width: 92px; } .lens-table th:first-child { width: 40px; } .lens-table th.tgt { width: 156px; }
 .lens-table th:first-child, .lens-table td.layer { position: sticky; left: 0; z-index: 2; background: var(--panel); }
 .lens-table th:first-child { z-index: 3; }
 .lens-cell { max-width: none; }
-.lens-table th.tgt, .lens-table td.lens-tgt { position: sticky; left: 40px; z-index: 2; background: var(--panel); box-shadow: -3px 0 0 var(--panel); }
+.lens-table th.tgt, .lens-table td.lens-tgt { position: sticky; left: 40px; z-index: 2; background: var(--panel); overflow: hidden; text-overflow: ellipsis; box-shadow: -3px 0 0 var(--panel); }
 .lens-table th.tgt { z-index: 3; }
