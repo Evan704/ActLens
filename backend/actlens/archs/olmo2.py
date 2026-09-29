@@ -55,6 +55,5 @@ class Olmo2Adapter(LlamaAdapter):
                                 label="resid_pre — attention input", description="Block input (the residual stream "
                                 "before attention); layer 0 is the embedding."),
             "resid_mid": ActDef(lambda b, c: c.tok(b.mlp.gate_proj.input), D, label="resid_mid — MLP input"),
-            "o_norm": ActDef(lambda b, c: c.tok(get(b, pa).output), D, label=f"o_norm — {pa}"),
-            "down_norm": ActDef(lambda b, c: c.tok(get(b, pm).output), D, label=f"down_norm — {pm}"),
+            **self.branch_norm_acts(d, pa, pm),
         }

@@ -142,6 +142,7 @@ export. PDFs embed the figure as a high-resolution image so CJK tokens render co
 | `gpt_neox` | `gpt_neox` | Pythia, Dolly, RedPajama-INCITE |
 | `phi3` | `phi3` | Phi-3, Phi-3.5, Phi-4-mini |
 | `olmo2` | `olmo2` | OLMo-2 |
+| `gemma2` | `gemma2`, `gemma3_text` | Gemma-2, Gemma-3 (text-only checkpoints such as 270m / 1b) |
 | `gpt2` | `gpt2` | GPT-2, DistilGPT-2 |
 
 Qwen3-0.6B and GPT-2 are tested on real checkpoints; every adapter is also tested on a tiny random model. An

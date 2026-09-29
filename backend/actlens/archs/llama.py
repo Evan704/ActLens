@@ -17,6 +17,7 @@ class LlamaAdapter(PreNormBlockAdapter):
     norm2, down_proj = "post_attention_layernorm", "mlp.down_proj"
     act_fn = "mlp.act_fn"  # the gate activation module, relative to a block
     rotary_path = "model.rotary_emb"  # module producing (cos, sin) before the first block
+    sandwich_norm = False  # blocks with a norm before *and* after each branch (Gemma-2/3) need their own adapter
 
     def probe_paths(self):
         model_paths, block_paths = super().probe_paths()
@@ -24,10 +25,21 @@ class LlamaAdapter(PreNormBlockAdapter):
                 [*block_paths, "self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
                  "mlp.gate_proj", "mlp.up_proj", self.act_fn])
 
+    def probe(self, root) -> list[str]:
+        missing = super().probe(root)
+        if not missing and has(get(root, self.layers_path)[0], "pre_feedforward_layernorm") != self.sandwich_norm:
+            return ["(pre_feedforward_layernorm: sandwich-norm blocks are not Llama-style)" if not self.sandwich_norm
+                    else "pre_feedforward_layernorm"]
+        return missing
+
     # ----- how the raw projections are read; fused-projection variants (Phi-3) override these two -----
     def proj_out(self, name: str, d: Dims) -> Reader:
         """Reader for the raw q/k/v projection output ("q" | "k" | "v"): host [T, heads*head_dim]."""
         return lambda b, c: c.tok(get(b, f"self_attn.{name}_proj").output)
+
+    def qk_norm_out(self, name: str) -> Reader:
+        """Reader for the QK-norm output ("q" | "k"): host [T, heads*head_dim], heads-major within a token."""
+        return lambda b, c: c.tok(get(b, f"self_attn.{name}_norm").output)
 
     def gate_up(self, d: Dims) -> tuple[Reader, Reader]:
         """Readers for the MLP gate and up projection outputs: host [T, inter]."""
@@ -64,11 +76,10 @@ class LlamaAdapter(PreNormBlockAdapter):
             return ActDef(lambda b, c: clamp(raw(b, c)), heads * Dh, heads, Dh)
 
         def qk_norm(name, heads):
-            return ActDef(lambda b, c: c.tok(get(b, f"self_attn.{name}_norm").output), heads * Dh, heads, Dh)
+            return ActDef(self.qk_norm_out(name), heads * Dh, heads, Dh)
 
         def rope(name, heads):
-            raw = (lambda b, c: c.tok(get(b, f"self_attn.{name}_norm").output)) if has_qk_norm \
-                else self.proj_out(name, d)
+            raw = self.qk_norm_out(name) if has_qk_norm else self.proj_out(name, d)
             return rope_act(raw if has_qk_norm else (lambda b, c: clamp(raw(b, c))), heads, Dh)
 
         out |= {"q": proj("q", nH), "k": proj("k", nKV), "v": proj("v", nKV)}

@@ -96,8 +96,12 @@ def test_attention_pattern_is_softmax_of_the_captured_q_and_k(prov, acts):
     K = K.repeat_interleave(d.n_heads // d.n_kv_heads, dim=1)
     T = Q.shape[2]
     scale = 1 / math.sqrt(d.head_dim) if d.attn_scale is None else d.attn_scale
-    scores = (Q @ K.transpose(-1, -2) * scale).masked_fill(
-        ~torch.tril(torch.ones(T, T, dtype=torch.bool)), float("-inf"))
+    scores = Q @ K.transpose(-1, -2) * scale
+    if d.attn_softcap:
+        scores = torch.tanh(scores / d.attn_softcap) * d.attn_softcap
+    i, j = torch.arange(T)[:, None], torch.arange(T)[None]
+    allowed = torch.stack([(j <= i) & ((i - j) < w if w else True) for w in d.windows or [None] * Q.shape[0]])
+    scores = scores.masked_fill(~allowed[:, None], float("-inf"))
     np.testing.assert_allclose(acts["attn_pattern"].astype(np.float64), scores.softmax(-1).numpy(), atol=2e-3)
 
 
@@ -179,3 +183,24 @@ def test_olmo2_norm_labels_say_the_norm_spans_all_heads():
     p = NNsightProvider("tiny/olmo2", device="cpu", model=tiny.TINY["olmo2"]())
     labels = {s.id: s.label for s in p.activations()}
     assert "all heads" in labels["q_norm"] and "all heads" in labels["k_norm"]
+
+
+def test_qk_norm_output_is_laid_out_heads_major_within_a_token(prov, acts):
+    """`q_norm`/`k_norm` equal the model's own norm applied to `q`/`k`: this catches a head/token axis mix-up,
+    which no shape check can (Gemma-3 normalizes after the head transpose, Qwen3 before)."""
+    if "q_norm" not in acts:
+        pytest.skip("no QK-norm")
+    d, layers = prov.dims, prov.model._model.model.layers
+    for name, heads in (("q", d.n_heads), ("k", d.n_kv_heads)):
+        for i in range(d.n_layers):
+            norm = getattr(layers[i].self_attn, f"{name}_norm")
+            x = torch.from_numpy(acts[name][i])  # [T, heads*Dh]
+            per_head = norm.weight.numel() == d.head_dim  # else the norm spans the whole projection (OLMo-2)
+            expect = norm(x.reshape(len(IDS), heads, d.head_dim) if per_head else x).detach().reshape(len(IDS), -1)
+            close(acts[f"{name}_norm"][i], expect.numpy(), rtol=1e-4, atol=1e-5)
+
+
+def test_multimodal_gemma3_is_rejected_with_a_pointer_to_the_text_checkpoint():
+    root = type("M", (), {"config": type("C", (), {"model_type": "gemma3"})()})()
+    with pytest.raises(ValueError, match=r"(?i)unsupported architecture.*gemma3_text"):
+        registry.resolve_adapter(root, "google/gemma-3-4b-it")

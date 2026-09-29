@@ -24,6 +24,8 @@ class Dims:
     attn_scale: float | None = None  # softmax scale applied to q.k; None means 1/sqrt(head_dim)
     residual_scale: float = 1.0  # attention/MLP outputs are multiplied by this before the residual add (Granite)
     parallel_residual: bool = False  # x + attn(ln1 x) + mlp(ln2 x): the MLP reads the block input, no `resid_mid`
+    attn_softcap: float | None = None  # scores become cap * tanh(scores / cap) before the mask and softmax (Gemma-2)
+    windows: tuple[int | None, ...] = ()  # per layer: sliding-attention window, None for full attention; () = all full
     pre_norm: bool = True  # a norm runs before attention and before the MLP (`attn_norm`, `mlp_norm`)
     branch_norm: bool = False  # attention/MLP outputs are normalized before the residual add (`o_norm`, `down_norm`)
 
@@ -150,6 +152,14 @@ class PreNormBlockAdapter(ArchAdapter):
             "attn_ctx": ActDef(lambda b, c: c.tok(get(b, o).input), H * Dh, H, Dh, label=f"attn_ctx — {o_name} input"),
             "o": ActDef(lambda b, c: c.tok(get(b, o).output), D, label=f"o — {o_name} output"),
             "down": ActDef(lambda b, c: c.tok(get(b, dn).output), D, label=f"down — {dn_name} output"),
+        }
+
+    def branch_norm_acts(self, d: Dims, attn_out_norm: str, mlp_out_norm: str) -> dict[str, ActDef]:
+        """`o_norm` / `down_norm`: the attention / MLP output after the post-norm, i.e. what enters the residual stream."""
+        D = d.hidden
+        return {
+            "o_norm": ActDef(lambda b, c: c.tok(get(b, attn_out_norm).output), D, label=f"o_norm — {attn_out_norm}"),
+            "down_norm": ActDef(lambda b, c: c.tok(get(b, mlp_out_norm).output), D, label=f"down_norm — {mlp_out_norm}"),
         }
 
     def shared_acts(self, d: Dims) -> dict[str, ActDef]:

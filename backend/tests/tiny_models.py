@@ -26,6 +26,9 @@ def gpt2():  # LayerNorm, fused QKV, learned positions, non-gated MLP
     return GPT2LMHeadModel(cfg).eval()
 
 
+SLIDING_PATTERN = ["sliding_attention", "full_attention", "sliding_attention"]  # one per layer (LAYERS = 3)
+
+
 def auto(model_type, **kw):
     """Factory for any `model_type` that `AutoModelForCausalLM` knows, built from COMMON plus overrides `kw`."""
     def make():
@@ -48,5 +51,11 @@ TINY = {
         "rope_type": "default", "rope_theta": 10000.0, "partial_rotary_factor": 1.0}),
     "phi3": auto("phi3"),  # fused qkv_proj / gate_up_proj, GQA
     "olmo2": auto("olmo2"),  # post-norm blocks, q/k RMSNorm over the whole projection
+    # sandwich norms, query_pre_attn_scalar != head_dim, sliding windows shorter than the test prompt and (Gemma-2) a
+    # soft-cap small enough to bite; a large initializer_range gives attention scores big enough to see all of it
+    "gemma2": auto("gemma2", initializer_range=0.5, sliding_window=4, query_pre_attn_scalar=12,
+                   attn_logit_softcapping=2.0, layer_types=SLIDING_PATTERN),
+    "gemma3": auto("gemma3_text", initializer_range=0.5, sliding_window=4, query_pre_attn_scalar=12,
+                   layer_types=SLIDING_PATTERN),  # per-head QK-norm, local RoPE on the sliding layers
     "olmo": auto("olmo", clip_qkv=0.05),  # non-parametric LayerNorm; a tiny clip_qkv makes the clamp bite
 }

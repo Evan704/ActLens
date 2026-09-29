@@ -184,6 +184,436 @@
    ]
   }
  ],
+ "gemma2": [
+  {
+   "id": "resid_pre",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": true,
+   "inputs": []
+  },
+  {
+   "id": "resid_mid",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": true,
+   "inputs": [
+    "resid_pre",
+    "o_norm"
+   ]
+  },
+  {
+   "id": "resid_post",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": true,
+   "inputs": [
+    "resid_mid",
+    "down_norm"
+   ]
+  },
+  {
+   "id": "attn_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "resid_pre"
+   ]
+  },
+  {
+   "id": "q",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "attn_norm"
+   ]
+  },
+  {
+   "id": "k",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "attn_norm"
+   ]
+  },
+  {
+   "id": "v",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "attn_norm"
+   ]
+  },
+  {
+   "id": "q_rope",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "q"
+   ]
+  },
+  {
+   "id": "k_rope",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "k"
+   ]
+  },
+  {
+   "id": "attn_pattern",
+   "kind": "attn",
+   "dim": null,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "q_rope",
+    "k_rope"
+   ]
+  },
+  {
+   "id": "attn_ctx",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "attn_pattern",
+    "v"
+   ]
+  },
+  {
+   "id": "o",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "attn_ctx"
+   ]
+  },
+  {
+   "id": "o_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "o"
+   ]
+  },
+  {
+   "id": "mlp_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "resid_mid"
+   ]
+  },
+  {
+   "id": "gate",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "mlp_norm"
+   ]
+  },
+  {
+   "id": "up",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "mlp_norm"
+   ]
+  },
+  {
+   "id": "silu",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "gate"
+   ]
+  },
+  {
+   "id": "swiglu",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "silu",
+    "up"
+   ]
+  },
+  {
+   "id": "down",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "swiglu"
+   ]
+  },
+  {
+   "id": "down_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "down"
+   ]
+  }
+ ],
+ "gemma3": [
+  {
+   "id": "resid_pre",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": true,
+   "inputs": []
+  },
+  {
+   "id": "resid_mid",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": true,
+   "inputs": [
+    "resid_pre",
+    "o_norm"
+   ]
+  },
+  {
+   "id": "resid_post",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": true,
+   "inputs": [
+    "resid_mid",
+    "down_norm"
+   ]
+  },
+  {
+   "id": "attn_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "resid_pre"
+   ]
+  },
+  {
+   "id": "q",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "attn_norm"
+   ]
+  },
+  {
+   "id": "k",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "attn_norm"
+   ]
+  },
+  {
+   "id": "v",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "attn_norm"
+   ]
+  },
+  {
+   "id": "q_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "q"
+   ]
+  },
+  {
+   "id": "k_norm",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "k"
+   ]
+  },
+  {
+   "id": "q_rope",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "q_norm"
+   ]
+  },
+  {
+   "id": "k_rope",
+   "kind": "token",
+   "dim": 16,
+   "n_heads": 2,
+   "stream": false,
+   "inputs": [
+    "k_norm"
+   ]
+  },
+  {
+   "id": "attn_pattern",
+   "kind": "attn",
+   "dim": null,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "q_rope",
+    "k_rope"
+   ]
+  },
+  {
+   "id": "attn_ctx",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": 4,
+   "stream": false,
+   "inputs": [
+    "attn_pattern",
+    "v"
+   ]
+  },
+  {
+   "id": "o",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "attn_ctx"
+   ]
+  },
+  {
+   "id": "o_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "o"
+   ]
+  },
+  {
+   "id": "mlp_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "resid_mid"
+   ]
+  },
+  {
+   "id": "gate",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "mlp_norm"
+   ]
+  },
+  {
+   "id": "up",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "mlp_norm"
+   ]
+  },
+  {
+   "id": "silu",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "gate"
+   ]
+  },
+  {
+   "id": "swiglu",
+   "kind": "token",
+   "dim": 64,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "silu",
+    "up"
+   ]
+  },
+  {
+   "id": "down",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "swiglu"
+   ]
+  },
+  {
+   "id": "down_norm",
+   "kind": "token",
+   "dim": 32,
+   "n_heads": null,
+   "stream": false,
+   "inputs": [
+    "down"
+   ]
+  }
+ ],
  "gpt2": [
   {
    "id": "resid_pre",
